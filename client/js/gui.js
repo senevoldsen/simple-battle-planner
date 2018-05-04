@@ -113,7 +113,7 @@
           'Unit.Land.Maneuvre.Infantry': '121100'
         , 'Unit.Land.Maneuvre.Infantry.Motorized': '121104'
         , 'Unit.Land.Maneuvre.Infantry.Mechanized': '121102'
-        , 'Unit.Land.Maneuvre.Infantry.Cavalry': '121300'
+        , 'Unit.Land.Maneuvre.Infantry.Cavalry': '121300' //TODO: Fix should not be under infantry.
         , 'Unit.Land.Maneuvre.Antitank': '120400'
         , 'Unit.Land.Maneuvre.Armoured': '120500'
     };
@@ -122,14 +122,15 @@
         return arr[Math.floor(Math.random() * arr.length)];
     }
 
-    const guiObjects = Object.create(null);
+    const objectState = Object.create(null);
+    const guiState = Object.create(null);
 
     gui.getObjectId = function (prefix) {
         var unique = false;
         var oid = '';
         while (!unique) {
             oid = prefix + Math.random().toString(36).slice(2);
-            unique = !(oid in guiObjects);
+            unique = !(oid in objectState);
         }
         return oid;
     }
@@ -149,6 +150,7 @@
         const version = '10'; // No change
         const identity = 0 + AFFILILIATION[description.affiliation]; // 0 is reality
         const symbolSet = TYPE['LAND_UNIT']
+        // const status = description.affiliation === 'HOSTILE' ? STATUS['PLANNED/ANTICIPATED/SUSPECT'] : STATUS['PRESENT']
         const status = STATUS['PRESENT']
         const special = HQ_TF_DUMMY['UNKNOWN']
         const echelon = ECHELON[description.echelon]
@@ -168,7 +170,7 @@
 
     gui.processState = function (state) {
         // Remove everything existing
-        Object.keys(guiObjects).forEach((oid) => {
+        Object.keys(objectState).forEach((oid) => {
             gui.processObject(oid, null);
         });
         // Recreate
@@ -195,18 +197,23 @@
         }
     };
 
+    gui.getState = function () {
+        const stateCopy = JSON.parse(JSON.stringify(objectState));
+        return stateCopy;
+    }
+
     gui.ensureDeleted = function(oid) {
-        if (guiObjects[oid]) {
-            delete guiObjects[oid];
+        if (objectState[oid]) {
+            delete objectState[oid];
         }
     }
 
     gui.processUnit = function (oid, unit) {
         if (unit === undefined) return;
         // Remove existing
-        const existing = guiObjects[oid];
+        const existing = objectState[oid];
         if (existing) {
-            G.markerLayer.removeLayer(existing.layer);    
+            G.markerLayer.removeLayer(guiState[oid].layer);
         }
         // Remove state entry if deleted
         if (unit === null) {
@@ -227,12 +234,11 @@
                 G.events.trigger('gui.unit.updated', [unit]);
             });
 
-            // Update story entry 
-            var guiState = {
-                object: unit,
+            // Update state entry
+            objectState[oid] = unit;
+            guiState[oid] = {
                 layer: marker
             };
-            guiObjects[oid] = guiState;
         };
     };
 

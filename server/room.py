@@ -6,15 +6,7 @@ import json
 import copy
 import logging
 
-log = logging.getLogger('BP_SERVER')
-
-
-def log_method_call(func):
-    def wrapped(self, *args, **kwargs):
-        global log
-        log.debug('%s called with args=%s and kwargs=%s', func.__name__, args, kwargs)
-        func(self, *args, **kwargs)
-    return wrapped
+from config import log, log_method_call
 
 
 class Room(object):
@@ -24,7 +16,7 @@ class Room(object):
         self.name = name
         self.clients = collections.OrderedDict()
         self.state = collections.OrderedDict()
-        self.went_empty_time = 0 # Will be used to plan for deletions
+        self.went_empty_time = 0  # Will be used to plan for deletions of idle/empty rooms
         self.persist = persist
 
     @log_method_call
