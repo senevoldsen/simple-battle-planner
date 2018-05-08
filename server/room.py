@@ -110,7 +110,12 @@ class Room(object):
                 self._send_message(client, message)
 
     def _replace_state(self, dict_like):
-        self.state = collections.OrderedDict(dict_like)
+        try:
+            prev_state = self.state
+            self.state = collections.OrderedDict(dict_like)
+        except Exception:
+            self.state = prev_state
+            log.warning('Room failed to replace state')
 
     def _state_modified(self):
         self.server.room_request_store(self, json.dumps(self.state))
@@ -118,9 +123,4 @@ class Room(object):
     def try_load_state(self):
         data = self.server.room_request_load(self)
         if data:
-            try:
-                prev_state = self.state
-                self._replace_state(json.loads(data))
-            except Exception:
-                self.state = prev_state
-                log.warning('Data malformed for room \'%s\'', self.name)
+            self._replace_state(json.loads(data))

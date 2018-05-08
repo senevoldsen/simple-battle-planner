@@ -24,6 +24,7 @@ def setup_logger():
 
 def log_method_call(func):
     global log
+
     def wrapped(self, *args, **kwargs):
         log.trace('%s called with args=%s and kwargs=%s', func.__name__, args, kwargs)
         func(self, *args, **kwargs)

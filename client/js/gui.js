@@ -3,172 +3,106 @@
     
     const gui = BP.gui = {};
 
-
-    /* --------------- Set A
-        The first set of ten digits:  
-
-        Digits 1 and 2 is the Version.   
-        Digits 3 and 4 is the Standard Identity.  
-        Digits 5 and 6 is the Symbol Set.   
-        Digit 7 is the Status.   
-        Digit 8 is the Headquarters/Task Force/Dummy.  
-        Digits 9 and 10 is the Amplifier/Descriptor
-    */
-    const AFFILIATION = {
-          'Pending': '0'
-        , 'Unknown': '1'
-        , 'Assumed Friend': '2'
-        , 'Friend': '3'
-        , 'Neutral': '4'
-        , 'Suspect': '5'
-        , 'Hostile': '6'
-    };
-
-    // Symbol set
-    const TYPE = {
-        'Land Unit': '10'
-    };
-
-    const STATUS = {
-          'Present': '0'
-        , 'Planned/Anticipated/Suspect': '1'
-        , 'Present/Fully Capable': '2'
-        , 'Present/Damaged': '3'
-        , 'Present/Destroyed': '4'
-        , 'Present/Full to capacity': '5'
-    };
-
-    // Headquarters/Task Force/Dummy
-    const HQ_TF_DUMMY = {
-          'Not Applicable': '0'
-        , 'Feint/Dummy': '1'
-        , 'Headquarters': '2'
-        , 'Feint/Dummy Headquarters': '3'
-        , 'Task Force': '4'
-        , 'Feint/Dummy Task Force': '5'
-        , 'Task Force Headquarters': '6'
-        , 'Feint/Dummy Fask Force Headquarters': '7'
-    };
-
-    // Echelon / Mobility / Towed array
-    const LAND_UNIT_ECHELON = {
-          'Unspecified': '00'
-        // Brigade and below
-        , 'Team/Crew': '11'
-        , 'Squad': '12'
-        , 'Section': '13'
-        , 'Platoon/Detachment': '14'
-        , 'Company/Battery/Troop': '15'
-        , 'Battalion/Squadron': '16'
-        , 'Regiment/Group': '17'
-        , 'Brigade': '18'
-        // Division and above
-        , 'Division': '21'
-        , 'Corps/Mef': '22'
-        , 'Army': '23'
-        , 'Army Group/Front': '24'
-        , 'Region/Theater': '25'
-        , 'Command': '26'
-    };
-
-    const LAND_EQUIPMENT_ECHELON = {
-        // Land mobility
-          'Wheeled Limited Cross Country': '31'
-        , 'Wheeled Cross Country': '32'
-        , 'Tracked': '33'
-        , 'Wheeled and Tracked Combination': '34'
-    };
-
-    /* --------------- Set B
-
-        The second set of ten digits:
-
-        Digits 11 and 12 is the entity.
-        Digits 13 and 14 is the entity type.
-        Digits 15 and 16 is the entity subtype.
-        Digits 17 and 18 is the first modifier.
-        Digits 19 and 20 is the second modifier.
-    */
-
-    const LAND_UNIT_ENTITY = {
-          'Unspecified': '000000'
-        , 'Infantry': '121100'
-        , 'Infantry - Motorized': '121104'
-        , 'Infantry - Mechanized': '121102'
-        , 'Cavalry': '121300'
-        , 'Antitank': '120400'
-        , 'Armoured': '120500'
-    };
-
-    const LAND_UNITS_MODIFIER_1 = {
-          'Unspecified': '00'
-        , 'Air Mobile/Assault': '01'
-        , 'Bridging': '06'
-        , 'Command and Control': '10'
-    };
-
-    const LAND_UNITS_MODIFIER_2 = {
-          'Unspecified': '00'
-        , 'Airborne': '01'
-        , 'Arctic': '02'
-        , 'Bicycle Equipped': '04'
-        , 'Mountain': '27'
-    };
-
-    gui.SymbolCode = function(sidc) {
-        this.sidc = sidc || '10011000000000000000';
-        return this;
-    };
-
-    gui.SymbolCode.fromDescription = function (description) {
-        const version = '10'; // No change
-        const identity = '0' + AFFILIATION[description.affiliation || 'Unknown']; // 0 is reality
-        const symbolSet = TYPE[description.type || 'Land Unit'];
-        const status = STATUS[description.status || 'Present'];
-        const special = HQ_TF_DUMMY[description.hq_tf_dummy || 'Not Applicable'];
-        const echelon = LAND_UNIT_ECHELON[description.echelon || 'Unspecified']
-        const entity = LAND_UNIT_ENTITY[description.entity || 'Infantry'];
-        const modifier1 = LAND_UNITS_MODIFIER_1[description.modifier1 || 'Unspecified'];
-        const modifier2 = LAND_UNITS_MODIFIER_1[description.modifier2 || 'Unspecified'];
-        const sidc = version + identity + symbolSet + status + special + echelon + entity + modifier1 + modifier2;
-        return new gui.SymbolCode(sidc);
-    };
-
-    gui.SymbolCode.prototype.toString = function () {
-        return this.sidc;
-    };
-
-    gui.SymbolCode.prototype.getDescription = function () {
-        const code = this.sidc;
-        // Inefficient!!!
-        function reverseFind(dict, value) {
-            for (var k in dict) {
-                if (dict[k] === value) {
-                    return k;
-                }
-            }
-            return '-';
+    class GuiObject {
+        constructor(oid) {
+            this.oid = oid;
         }
-        return {
-            version: '10',
-            identity1: 'Reality',
-            affiliation: reverseFind(AFFILIATION, code.slice(3, 4)),
-            type: reverseFind(TYPE, code.slice(4, 6)),
-            status: reverseFind(STATUS, code.slice(6, 7)),
-            hq_tf_dummy: reverseFind(HQ_TF_DUMMY, code.slice(7,8)),
-            echelon: reverseFind(LAND_UNIT_ECHELON, code.slice(8,10)),
-            entity: reverseFind(LAND_UNIT_ENTITY, code.slice(10, 16)),
-            modifier1: reverseFind(LAND_UNITS_MODIFIER_1, code.slice(16,18)),
-            modifier2: reverseFind(LAND_UNITS_MODIFIER_2, code.slice(18, 29))
-        };
-    };
+        toJSON() {
+            throw Error('toJSON must be overridden');
+        }
+
+        updateFromJSON(json) {
+            throw Error('updateFromJSON must be overridden');
+        }
+
+        static fromJSON(json) {
+            throw Error('fromJSON must be overridden');
+        }
+
+        // Restore current state to map
+        updateGui() {
+            throw Error('updateGui must be overridden');
+        }
+        // Remove object from map
+        removeFromGui() {
+            throw Error('removeFromGui must be overridden');
+        }
+    }
+
+    class Unit extends GuiObject {
+
+        constructor(oid, identifier) {
+            super(oid);
+            this.identifier = identifier;
+            this.pos = [0, 0];
+            this.isDraggable = false;
+            this._guiState = {};
+
+            // Optionally set elsewhere
+            //this.options = {};
+        }
+
+        get _serializeProperties() {
+            return ['oid', 'identifier', 'pos', 'isDraggable', 'options'];
+        }
+
+        toJSON() {
+            const result = {};
+            this._serializeProperties.forEach((propName) => {
+                if (propName in this) {
+                    result[propName] = this[propName];
+                }
+            });
+            return result;
+        }
+
+        updateFromJSON(json) {
+            this._serializeProperties.forEach((propName) => {
+                if (propName in json) {
+                    this[propName] = json[propName];
+                }
+            });
+        }
+
+        static fromJSON(json) {
+            const unit = new Unit(json.oid, json.identifier);
+            unit.updateFromJSON(json);
+            return unit;
+        }
+
+        updateGui() {
+            this.removeFromGui();
+            const icon = BP.gui.getIconForUnit(this);
+            const leafPos = L.latLng(G.bpMap.gameToMap(this.pos));
+            const marker = L.marker(leafPos, {icon: icon, draggable: this.isDraggable});
+            marker.addTo(G.markerLayer);
+
+            marker.on('contextmenu', (event) => {
+                gui.onUnitContextMenu(this);
+            });
+            
+            marker.on('moveend', (event) => {
+                this.pos = G.bpMap.mapToGame(marker.getLatLng());
+                gui.markModified(this, 'remote');
+            });
+
+            this._guiState.layer = marker;
+        }
+
+        removeFromGui() {
+            if (this._guiState.layer) {
+                G.markerLayer.removeLayer(this._guiState.layer);
+                this._guiState.layer = null;
+            }
+        }
+    }
+
 
     function randomElem(arr) {
         return arr[Math.floor(Math.random() * arr.length)];
     }
 
     const objectState = Object.create(null);
-    const guiState = Object.create(null);
     var guiModifiedObjects = Object.create(null);
     var guiModifyHandler = null;
 
@@ -184,24 +118,22 @@
 
     gui.getRandomUnit = function () {
         const description = gui.getRandomUnitDescription();
-        const symbolCode = new gui.SymbolCode.fromDescription(description).toString();
-        return {
-            oid: gui.getObjectId('unit.'),
-            identifier: symbolCode
-        };
+        const symbolCode = BP.symbol.SymbolCode.fromDescription(description).toString();
+        return new Unit(gui.getObjectId('unit.'), symbolCode);
     };
 
     gui.getRandomUnitDescription = function () {
+        const S = BP.symbol;
         const description = {
             affiliation: randomElem(['Friend', 'Hostile', 'Neutral']),
             type: 'Land Unit',
             status: 'Present',
             // Skip HQ/TF/Dummy
-            echelon: randomElem(Object.keys(LAND_UNIT_ECHELON).filter((k) => {
-                const number = parseInt(LAND_UNIT_ECHELON[k], 10);
+            echelon: randomElem(S.LAND_UNIT_ECHELON.entries.filter(([code, text]) => {
+                const number = parseInt(code, 10);
                 return number >= 12 && number <= 18;
-            })),
-            entity: randomElem(Object.keys(LAND_UNIT_ENTITY))
+            }))[1],
+            entity: randomElem(S.LAND_UNIT_ENTITY.texts)
             // Skip modifiers
         };
         return description;
@@ -243,17 +175,31 @@
     /*
         Derives processing from object identifier (oid)
     */
-    gui.processObject = function (oid, object) {
+    gui.processObject = function (oid, data) {
         const objectType = gui.getTypeFromOid(oid);
-        if (objectType === 'unit') {
-            gui.processUnit(oid, object);
-            return;
-        } 
-        if (objectType === 'axis') {
-            gui.processAxis(oid, object);
+
+        if (objectType !== 'unit') {
+            console.log(`Unknown object type '${objectType}' for id '${oid}'`);
             return;
         }
-        console.log(`Unknown object type '${objectType}' for id '${oid}'`)
+
+        let existing = objectState[oid] || null;
+        if (data == null) {
+            if (existing) {
+                existing.removeFromGui();
+                delete objectState[oid];
+            }
+            console.log('removing existing');
+        } else {
+            if (existing === null) {
+                existing = Unit.fromJSON(data);
+                objectState[oid] = existing;
+            } else {
+                existing.updateFromJSON(data);
+            }
+            existing.updateGui();
+            console.log('adding');
+        }
     };
 
     gui.getState = function () {
@@ -270,7 +216,7 @@
     /*
         This function is used to collect all modifications to prevent sending redudant information
     */
-    gui.markModifed = function (object, sync) {
+    gui.markModified = function (object, sync) {
         // Store modification info
         const prevData = guiModifiedObjects[object.oid];
         const activeData = prevData || {syncLocal: false, syncRemote: false, object: object};
@@ -353,56 +299,56 @@
             ['Modify Symbol', () => gui.openModifyUnitMenu(unit)]
         ];
 
-        if (unit.guiIsDraggable) {
+        if (unit.isDraggable) {
             items.push(['Disable Dragging', () => {
-                unit.guiIsDraggable = false;
-                gui.markModifed(unit);
+                unit.isDraggable = false;
+                gui.markModified(unit);
             }]);
         } else {
             items.push(['Enable Dragging', () => {
-                unit.guiIsDraggable = true;
-                gui.markModifed(unit);
+                unit.isDraggable = true;
+                gui.markModified(unit);
             }]);
         }
 
-        items.push('SEPARATOR');
+        // items.push('SEPARATOR');
 
-        if (unit.axis) {
-            items.push(['Remove Axis', () => {
-                const axisOid = unit.axis;
-                delete unit['axis'];
+        // if (unit.axis) {
+        //     items.push(['Remove Axis', () => {
+        //         const axisOid = unit.axis;
+        //         delete unit['axis'];
 
-                const axis = objectState[axisOid];
-                G.events.trigger('gui.object.deleted', [axis]);
-                gui.processObject(axis.oid, null);
-                G.events.trigger('gui.object.updated', [unit]);
-                gui.processObject(unit.oid, unit);
-            }]);
-        } else {
-            items.push(['Add Axis', () => {
-                const map = G.leafMap;
-                const onClick = (e) => {
-                    const mapPos = e.latlng;
-                    const gamePos = G.bpMap.mapToGame(mapPos);
-                    const axisFrom = [unit.pos[0], unit.pos[1]];
-                    const axisTo = gamePos;
-                    const newAxisOid = gui.getObjectId('axis.');
-                    const newAxis = {
-                        oid: newAxisOid,
-                        owner: unit.oid,
-                        fromPos: axisFrom,
-                        toPos: axisTo
-                    };
-                    unit.axis = newAxisOid;
-                    G.events.trigger('gui.object.created', [newAxis]);
-                    gui.processObject(newAxis.oid, newAxis);
-                    G.events.trigger('gui.object.updated', [unit]);
-                    gui.processObject(unit.oid, unit);
-                    map.off('click', onClick);
-                };
-                map.on('click', onClick);
-            }]);
-        }
+        //         const axis = objectState[axisOid];
+        //         G.events.trigger('gui.object.deleted', [axis]);
+        //         gui.processObject(axis.oid, null);
+        //         G.events.trigger('gui.object.updated', [unit]);
+        //         gui.processObject(unit.oid, unit);
+        //     }]);
+        // } else {
+        //     items.push(['Add Axis', () => {
+        //         const map = G.leafMap;
+        //         const onClick = (e) => {
+        //             const mapPos = e.latlng;
+        //             const gamePos = G.bpMap.mapToGame(mapPos);
+        //             const axisFrom = [unit.pos[0], unit.pos[1]];
+        //             const axisTo = gamePos;
+        //             const newAxisOid = gui.getObjectId('axis.');
+        //             const newAxis = {
+        //                 oid: newAxisOid,
+        //                 owner: unit.oid,
+        //                 fromPos: axisFrom,
+        //                 toPos: axisTo
+        //             };
+        //             unit.axis = newAxisOid;
+        //             G.events.trigger('gui.object.created', [newAxis]);
+        //             gui.processObject(newAxis.oid, newAxis);
+        //             G.events.trigger('gui.object.updated', [unit]);
+        //             gui.processObject(unit.oid, unit);
+        //             map.off('click', onClick);
+        //         };
+        //         map.on('click', onClick);
+        //     }]);
+        // }
 
         const map = G.leafMap;
         const mapPos = new L.latLng(G.bpMap.gameToMap(unit.pos));
@@ -440,70 +386,6 @@
             .openOn(map);
     };
 
-    /*
-        Fixes properties been added later
-    */
-    function fixUnitLegacy(unit) {
-        unit.guiIsDraggable = !!unit.guiIsDraggable;
-    }
-
-    gui.processUnit = function (oid, unit) {
-        if (unit === undefined) return;
-        // Remove existing
-        const existing = objectState[oid];
-        if (existing) {
-            G.markerLayer.removeLayer(guiState[oid].layer);
-        }
-        // Remove state entry if deleted
-        if (unit === null) {
-            gui.ensureDeleted(oid);
-        } else {
-            fixUnitLegacy(unit);
-            // Reestablish gui part
-            const icon = BP.gui.getIconForUnit(unit);
-            const leafPos = L.latLng(G.bpMap.gameToMap(unit.pos));
-            const marker = L.marker(leafPos, {icon: icon, draggable: unit.guiIsDraggable});
-            marker.addTo(G.markerLayer);
-
-            marker.on('contextmenu', (event) => {
-                gui.onUnitContextMenu(unit);
-            });
-            
-            marker.on('moveend', (event) => {
-                unit.pos = G.bpMap.mapToGame(marker.getLatLng());
-                gui.markModifed(unit, 'remote');
-            });
-
-            // Update state entry
-            objectState[oid] = unit;
-            guiState[oid] = {
-                layer: marker
-            };
-        };
-    };
-
-    gui.processAxis = function (oid, axis) {
-        if (axis === undefined) return;
-        const existing = objectState[oid];
-        if (existing) {
-            G.axisLayer.removeLayer(guiState[oid].layer);
-        }
-        // Remote state entry if deleted
-        if (axis === null) {
-            gui.ensureDeleted(oid);
-        } else {
-            const fromPos = G.bpMap.gameToMap(axis.fromPos);
-            const toPos = G.bpMap.gameToMap(axis.toPos);
-            const line = L.polyline([fromPos, toPos], {color: 'blue', weight: 5});
-            line.addTo(G.axisLayer);
-            objectState[oid] = axis;
-            guiState[oid] = {
-                layer: line
-            };
-        }
-    };
-
-
     gui.openModifyUnitMenu = function (unit) {
 
         function htmlToElement(html) {
@@ -525,15 +407,13 @@
             return htmlToElement(html);
         }
 
-        function createSelectorFromDict(label, id, dict) {
+        function createSelectorFromCodeMap(label, id, codeMap) {
             // Fix order later...
             const selector = mdcSelector(id, label);
             const selectElem = selector.querySelector('#' + id);
-            Object.keys(dict).forEach((key, i) => {
-                const value = dict[key];
-                selectElem.add(new Option(key, value, false, i == 0));
+            codeMap.entries.forEach(([code, text], i) => {
+                selectElem.add(new Option(text, code, false, i == 0));
             });
-
             const jsSelect = new mdc.select.MDCSelect(selector);
             jsSelect.listen('change', () => {
                 updateSymbol();
@@ -591,20 +471,35 @@
             </aside>`
         );
 
-        const containerHtml = `
-        <div class='mdc-typography' style="margin-left: auto; margin-right: auto;">`;
-            // <h2 class="mdc-typography--display2">Select Symbol</h2></div>`;
+        const containerHtml = `<div class='mdc-typography' style="margin-left: auto; margin-right: auto;">`;
 
-        // Menus
+        // Construct Menu
+        const S = BP.symbol;
         const containerElem = htmlToElement(containerHtml);
-        containerElem.appendChild(createSelectorFromDict('Affiliation', 'affiliation', AFFILIATION));
-        containerElem.appendChild(createSelectorFromDict('Echelon', 'land-unit-echelon', LAND_UNIT_ECHELON));
-        containerElem.appendChild(createSelectorFromDict('Entity', 'land-unit-entity', LAND_UNIT_ENTITY));
-        containerElem.appendChild(createSelectorFromDict('Modifier 1', 'land-units-modifier_1', LAND_UNITS_MODIFIER_1));
-        containerElem.appendChild(createSelectorFromDict('Modifier 2', 'land-units-modifier_2', LAND_UNITS_MODIFIER_2));
-
+        containerElem.appendChild(createSelectorFromCodeMap('Affiliation', 'affiliation', S.IDENTITY));
+        containerElem.appendChild(createSelectorFromCodeMap('Echelon', 'land-unit-echelon', S.LAND_UNIT_ECHELON));
+        containerElem.appendChild(createSelectorFromCodeMap('Entity', 'land-unit-entity', S.LAND_UNIT_ENTITY));
+        containerElem.appendChild(createSelectorFromCodeMap('Modifier 1', 'land-units-modifier_1', S.LAND_UNITS_MODIFIER_1));
+        containerElem.appendChild(createSelectorFromCodeMap('Modifier 2', 'land-units-modifier_2', S.LAND_UNITS_MODIFIER_2));
         containerElem.appendChild(createTextElement('Designation', 'designation'));
         containerElem.appendChild(createTextElement('Higher Formation', 'higher-formation'));
+
+        // Initialize with data if possible
+        const symbolDesc = (new S.SymbolCode(unit.identifier)).getDescription();
+        const trySelect = (selection, text) => {
+            const fullSelection = selection + ' option'; // + ' select option';
+            const elems = containerElem.querySelectorAll(fullSelection);
+            Array.from(elems).filter((elem) => elem.text === text).forEach((elem) => elem.selected = true);
+        };
+        trySelect('#affiliation', symbolDesc.identity);
+        trySelect('#land-unit-echelon', symbolDesc.echelon);
+        trySelect('#land-unit-entity', symbolDesc.entity);
+        trySelect('#land-units-modifier_1', symbolDesc.modifier1);
+        trySelect('#land-units-modifier_2', symbolDesc.modifier2);
+
+        containerElem.querySelector('#designation').value = unit.options ? unit.options.uniqueDesignation : '';
+        containerElem.querySelector('#higher-formation').value = unit.options ? unit.options.higherFormation : '';
+
 
         // Preview
         var lastSidc = '';
@@ -639,7 +534,7 @@
         const onAccept = () => {
             unit.identifier = lastSidc;
             unit.options = lastOptions;
-            gui.markModifed(unit);
+            gui.markModified(unit);
             deleteDialog();
         };
 
@@ -658,12 +553,3 @@
     };
 
 })(window.BP = window.BP || {});
-
-
-/* Python extract from PDF
-matches = re.findall(r'\s*(\D+)\s*(\d+)\s*', text)
-matches = [(re.sub(r'\n', '', t.strip()), n) for t, n in matches]
-matches = [(re.sub(r'[\s-]+', '_', t), n) for t, n in matches]
-
-print(',\n'.join("'%s': '%s'" % (key.upper(), num) for key, num in matches))
-*/
