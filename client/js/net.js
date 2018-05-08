@@ -71,6 +71,7 @@
 
         socket.onclose = function(event) {
             closeReason = event.reason;
+            console.log(["onclose", event]);
             context.trigger('connection', ['CLOSED']);
         };
 

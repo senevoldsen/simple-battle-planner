@@ -1,0 +1,9 @@
+*.db
+*.log
+*.bat
+test
+client/leaflet
+client/maps
+client/**/*.zip
+client/lib
+**/__pycache__

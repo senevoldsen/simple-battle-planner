@@ -9,28 +9,36 @@
     <link rel="shortcut icon" type="image/x-icon" href="docs/images/favicon.ico" />
 
     <link rel="stylesheet" href="css/leaflet.css" />
-    <script src="js/EventEmitter.js"></script>
-    <script src="js/map.js"></script>
-    <script src="js/gui.js"></script>
-    <script src="js/net.js"></script>
+    <link rel="stylesheet" href="css/bp.css" />
+    <script src="lib/EventEmitter.js"></script>
     <script src="lib/leaflet-src.js"></script>
     <!-- <script src="lib/L.TileLayer.NoGap.js"></script> -->
     <script src="lib/milsymbol.js"></script>
+    <script src="js/map.js"></script>
+    <script src="js/gui.js"></script>
+    <script src="js/net.js"></script>
+
+    <link href="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.css" rel="stylesheet">
 </head>
 <body>
 
 <input type="button" onclick="doReset()" value="Reset" /><br/>
 <input type="button" onclick="doFileSave()" value="Export" /><br/>
-Load Scenario <input type="file" onchange="doFileLoad(this.files[0])" />
+Load Scenario <input type="file" onchange="doFileLoad(this.files[0])" /><br/>
+<h3 id='connection-status'>Trying to Connect</h3>
 <!-- <div id="mapid" style="width: 600px; height: 400px;"></div> -->
 <!-- <hr/> -->
 <div id="bp_map" style="margin-left: auto; margin-right: auto; width: 80%; height: 1000px;"></div>
 
 <script type="text/javascript">
 
- // Per object transmission based on delta to key-indexed objects. Possible JSON struct keyed by /room/object_id
- // Fix coordinate conversions
+/*
+    TODO: Move unit symbol stuff into own file to simplify gui.js ?
+    TODO: Try to move modify symbol dialog into html instead.
+    CONSIDER: different detail level depending on map zoom.
 
+    TODO: Clean up unused gui state
+*/
     var mapConfigs = {};
     mapConfigs.taunus = {
         title: "XCAM Taunus",
@@ -77,28 +85,22 @@ Load Scenario <input type="file" onchange="doFileLoad(this.files[0])" />
         tileSize: tileSize
     }).addTo(G.leafMap);
 
+    G.axisLayer = L.layerGroup().addTo(G.leafMap);
     G.markerLayer = L.layerGroup().addTo(G.leafMap);
-    const popup = L.popup().setContent('<p>Hello world!<br />This is a nice popup.</p>');
-
+    
     // Wire state events together
     G.events = new EventEmitter();
 
     function setupGuiEvents() {
-        G.events.on('gui.unit.created', (unit) => {
-            G.events.trigger('object.updated', [{oid: unit.oid, object: unit}]);
-            G.netContext.send({type: 'key-set', key: unit.oid, value: unit});
+        G.events.on('gui.object.created', (object) => {
+            G.netContext.send({type: 'key-set', key: object.oid, value: object});
         });
 
-        G.events.on('gui.unit.deleted', (unit) => {
-            G.events.trigger('object.updated', [{oid: unit.oid, object: null}]);
-            G.netContext.send({type: 'key-delete', key: unit.oid});
+        G.events.on('gui.object.deleted', (object) => {
+            G.netContext.send({type: 'key-delete', key: object.oid});
         });
 
-        G.events.on('gui.unit.updated', (unit) => {
-            G.events.trigger('object.update-remote', [unit]);
-        });
-
-        G.events.on('object.update-remote', (object) => {
+        G.events.on('gui.object.updated', (object) => {
             G.netContext.send({type: 'key-set', key: object.oid, value: object});
         });
 
@@ -113,7 +115,7 @@ Load Scenario <input type="file" onchange="doFileLoad(this.files[0])" />
             });
         });
 
-        G.events.on('object.updated', (data) => {
+        G.events.on('remote.object.updated', (data) => {
             BP.gui.processObject(data.oid, data.object);
         });
     }
@@ -175,12 +177,27 @@ Load Scenario <input type="file" onchange="doFileLoad(this.files[0])" />
         context.on('key-set', (data) => {
             const key = data.key;
             const value = data.value;
-            G.events.trigger('object.updated', [{oid: key, object: value}]);
+            G.events.trigger('remote.object.updated', [{oid: key, object: value}]);
         });
 
         context.on('key-delete', (data) => {
             const key = data.key;
-            G.events.trigger('object.updated', [{oid: key, object: null}]);
+            G.events.trigger('remote.object.updated', [{oid: key, object: null}]);
+        });
+
+        const statusElem = document.getElementById('connection-status');
+        context.on('connection', (status) => {
+            console.log(['connection', status]);
+            statusElem.style.color = 'green';
+            statusElem.textContent = status;
+        });
+
+        context.on('error', (err) => {
+            console.log(['error', err]);
+            if (err.code === 'ERR_CONNECTION') {
+                statusElem.style.color = 'red';
+                statusElem.textContent = err.code + " - " + err.message;    
+            }
         });
 
         return context;
@@ -190,26 +207,9 @@ Load Scenario <input type="file" onchange="doFileLoad(this.files[0])" />
     var socketAddress = "ws://" + hostname + ":8020/";
     G.netContext = setupNetContext(socketAddress)
 
-    function onLeftClickOnMap(e) {
-        const pos = e.latlng;
-        if (mapBounds.contains(pos)) {
-            const gamePos = G.bpMap.mapToGame([pos.lat, pos.lng]);
-            const unit = BP.gui.getRandomUnitDescription();
-            unit.pos = gamePos;
-            G.events.trigger('gui.unit.created', [unit]);    
-        }
-    }
-
-    function onContextMenu() {
-        popup.setLatLng(e.latlng).openOn(G.leafMap);
-    }
-
-    G.leafMap.on('click', onLeftClickOnMap);
-
-    G.leafMap.on('contextmenu',function(e){
-    });
+    BP.gui.initHandling();
 
 </script>
-
+<script src="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.js" charset="utf-8"></script>
 </body>
 </html>

@@ -3,19 +3,27 @@ import json
 import socket
 import sys
 import websockets
+import datetime
 
 from config import log
 from room import Room
+import persist
 
 '''
-    - Problem with some pending tasks not being shut down properly
     - Need room cleaning
     - Room/Client meta handling
+    - Handle persistence better instead of on each delta
 '''
 
-clients = {}
-rooms = {}
-next_id = 1
+
+class BPException(Exception):
+    def __init__(self, message):
+        super(BPException, self).__init__(message)
+
+
+class KeepAliveFailed(BPException):
+    def __ini__(self, message):
+        super(KeepAliveFailed, self).__init__(message)
 
 
 class Client(object):
@@ -43,10 +51,154 @@ class Client(object):
             self.outgoing_messages.task_done()
 
 
+class Server(object):
+    """Used for general interaction from submodules"""
+    def __init__(self):
+        super(Server, self).__init__()
+        self._next_cid = 1
+        self.db = None
+        self.rooms = {}
+        self.clients = {}
+        self.message_handlers = {}
+        # Open storage before creating room
+        self._open()
+        self.default_room = self.rooms['default'] = self.create_room('default', persistent=True)
+
+    def _open(self):
+        if self.db:
+            self.close()
+        self.db = persist.SqliteKeyStore('serverdata.db')
+        self.db.open()
+
+    def close(self):
+        if self.db:
+            self.db.close()
+        self.db = None
+
+    def create_room(self, name, *args, **kwargs):
+        new_room = Room(name, self, *args, **kwargs)
+        new_room.try_load_state()
+        return new_room
+
+    # Currently overwrites e.g. not adding
+    def add_handler(self, msg_type, func):
+        self.message_handlers[msg_type] = func
+
+    def room_request_store(self, room, data):
+        if self.db is not None:
+            self.db.store(room.name, data)
+
+    def room_request_load(self, room):
+        if self.db is not None:
+            return self.db.load(room.name)
+        else:
+            return None
+
+    def setup_client(self, websocket):
+        cid, self._next_cid = self._next_cid, self._next_cid + 1
+        client = Client(cid, websocket)
+        self.clients[cid] = client
+        client.room = self.default_room
+        client.room.member_join(client)
+        return client
+
+    def remove_client(self, client):
+        if client.room is not None:
+            client.room.member_leave(client)
+        del self.clients[client.cid]
+
+    def handle_message(self, client, msg_type, data):
+        handler = self.message_handlers.get(msg_type, None)
+        if handler is None:
+            return False
+        handler(client, data)
+        return True
+
+    # allowed_age is a duration/timedelta
+    # This should be called regularly by an async timer.
+    def remove_empty_old_rooms(self, allowed_age):
+        now = datetime.datetime.now()
+        old_rooms = (
+            r for r in self.rooms
+            if not r.persistent and r.went_empty_time is not None and (now - r.went_empty_time) > allowed_age
+        )
+        for room in old_rooms:
+            log.info('Meant to delete room \'%s\' now, but resetting timer instead', room.name)
+            room.went_empty_time = now
+
+
+main_server = Server()
+
+
+def message_handler(server, msg_type):
+    def add_handler(func):
+        server.add_handler(msg_type, func)
+    return add_handler
+
+
+@message_handler(main_server, 'room-join')
+def on_room_join(client, data):
+    room_name = data['room-name']
+    nickname = data['username']
+
+    # Create room if not exists
+    if room_name not in rooms:
+        new_room = rooms[room_name] = Room(room_name)
+    else:
+        new_room = rooms[room_name]
+
+    if client.room is not None:
+        client.room.member_leave(client)
+
+    # Update client data
+    client.name = nickname
+    client.room = new_room
+
+    # Join new room
+    new_room.member_join(client)
+
+
+@message_handler(main_server, 'room-create')
+def on_text_message(client, data):
+    text = data['text']
+    if client.room:
+        client.room.message_send_text(client, text)
+
+
+@message_handler(main_server, 'state')
+def on_state(client, data):
+    room = client.room
+    if room:
+        room.force_set_state(data['value'], exclude=client)
+    else:
+        log.warning('No room to forward state to')
+
+
+@message_handler(main_server, 'key-set')
+def key_set(client, data):
+    if client.room:
+        client.room.set_key(client, data['key'], data['value'])
+
+
+@message_handler(main_server, 'key-delete')
+def key_delete(client, data):
+    if client.room:
+        client.room.delete_key(client, data['key'])
+
+
 async def consumer_handler(client):
-    async for message in client.socket:
-        client.bytes_received += len(message)
-        await handle_message(client, message)
+    while True:
+        try:
+            message = await asyncio.wait_for(client.socket.recv(), timeout=20)
+        except asyncio.TimeoutError:
+            try:
+                pong_waiter = await client.socket.ping()
+                await asyncio.wait_for(pong_waiter, timeout=10)
+            except asyncio.TimeoutError:
+                raise KeepAliveFailed('Connection to client lost')
+        else:
+            client.bytes_received += len(message)
+            await handle_message(client, message)
 
 
 async def handle_message(client, message):
@@ -55,87 +207,24 @@ async def handle_message(client, message):
         error = False
         data = json.loads(message)
         msg_type = data['type']
-        client_room = client.room
-
-        if msg_type == 'room-join':
-            room_name = data['room-name']
-            nickname = data['username']
-
-            # Create room if not exists
-            if room_name not in rooms:
-                new_room = rooms[room_name] = Room(room_name)
-            else:
-                new_room = rooms[room_name]
-
-            if client_room is not None:
-                client_room.member_leave(client)
-
-            # Update client data
-            client.name = nickname
-            client.room = client_room = room
-
-            # Join new room
-            room.member_join(client)
-
-            # Reply success
-            reply = {
-                'type': 'room-joined',
-                'room': room_name,
-                'username': nickname
-            }
-            client.queue_message(reply)
-
-        elif msg_type == 'room-create':
-            # Leave any current rooms
-            # Create room
-            # Init room state
-            # Join room
-            pass
-
-        elif msg_type == 'text-message':
-            text = data['text']
-            if client.room:
-                client.room.message_send_text(client, text)
-
-        # Forward if state
-        elif msg_type == 'state':
-            room = client.room
-            if room:
-                room.force_set_state(data['value'], exclude=client)
-            else:
-                log.warning('No room to forward state to')
-        elif msg_type == 'key-set':
-            if client_room:
-                client_room.set_key(client, data['key'], data['value'])
-        elif msg_type == 'key-delete':
-            if client_room:
-                client_room.delete_key(client, data['key'])
-
-        else:
-            error = True
+        handled = main_server.handle_message(client, msg_type, data)
+        error = not handled
     except (json.decoder.JSONDecodeError, KeyError):
+        log.debug('Malformed message received: %s', message)
         error = True
     if error:
-        print("Reporting error back")
+        log.debug('Unknown message type received: %s', msg_type)
         reply = json.dumps({'type': 'error', 'text': 'Bad message'})
         await client.queue_message(reply)
 
-# Create default room
-default_room = rooms['default'] = Room('default', persist=True)
-
 
 async def handler(websocket, path):
-    global clients, next_id, default_room
-    cid, next_id = next_id, next_id + 1
-    client = Client(cid, websocket)
-    clients[cid] = client
+    global main_server
+    server = main_server
 
+    client = server.setup_client(websocket)
     client_address = websocket.remote_address
     log.info("A connection was made from %s", client_address)
-
-    client_room = default_room
-    client_room.member_join(client)
-    client.room = client_room
 
     try:
         consumer_task = asyncio.ensure_future(consumer_handler(client))
@@ -153,18 +242,21 @@ async def handler(websocket, path):
             exception = task.exception()
             if exception:
                 raise exception
-
-    except websockets.exceptions.ConnectionClosed:
-        pass
-        # log.info('Connection from %s was unexpectedly closed', client_address)
+    except KeepAliveFailed as e:
+        log.debug('Keep-alive failed for %s', client_address)
+    except websockets.exceptions.ConnectionClosed as e:
+        if e.code not in (1000, 1001):
+            log.debug('Connection from %s closed abnormally [%d]. Reason: %s', client_address, e.code, e.reason)
+        else:
+            log.info('Connection from %s closing normally', client_address)
     except Exception as e:
-        log.warning('Unknown error \'%s\'. Connection from %s was terminated', e, client_address)
+        log.warning('Connection from %s was terminated. Unknown error \'%s\'.', client_address, e)
+    else:
+        log.warning('FIX: Unhandled connection shutdown case')
     finally:
         log.debug('Connection from %s used %d kB', client_address, round((client.bytes_sent + client.bytes_received) // 1024))
-        log.info('Connection from %s was closed', client_address)
-        if client.room is not None:
-            client.room.member_leave(client)
-        del clients[cid]
+        server.remove_client(client)
+    # Connection automatically closed, if not already, on exit here
 
 
 async def keyboard_interrupt_checker():
@@ -186,3 +278,5 @@ try:
     asyncio.get_event_loop().run_forever()
 except KeyboardInterrupt:
     log.info('User stopped server')
+finally:
+    main_server.close()
