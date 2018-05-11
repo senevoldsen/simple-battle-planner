@@ -1,3 +1,9 @@
+import {Map} from './map.js';
+import * as net from './net.js';
+import * as gui from './gui.js';
+import * as guiOrder from './gui.order.js';
+import * as testLeaflet from './leaflet/movesegment.js';
+
 /*
 TODO: Try to move modify symbol dialog into html instead.
 CONSIDER: different detail level depending on map zoom.
@@ -18,9 +24,9 @@ mapConfigs.taunus = {
     tileSize: 512
 };
 
-const G = {};
+const G = window.G = {};
 
-G.bpMap = new BP.Map(mapConfigs.taunus);
+G.bpMap = new Map(mapConfigs.taunus);
 
 // Construct Leaflet items
 
@@ -70,7 +76,7 @@ function setupGuiEvents() {
     });
 
     G.events.on('state.received', (remoteState) => {
-        BP.gui.processState(remoteState);
+        gui.processState(remoteState);
     });
 
     G.events.on('state.send', (state) => {
@@ -81,20 +87,22 @@ function setupGuiEvents() {
     });
 
     G.events.on('remote.object.updated', (data) => {
-        BP.gui.processObject(data.oid, data.object);
+        gui.processObject(data.oid, data.object);
     });
 }
 
 setupGuiEvents();
 
-function doReset() {
+let userAction;
+window.userAction = userAction = {};
+userAction.doReset = () => {
     var newState = {};
     G.events.trigger('state.send', [newState]);
     // Fake the it being received to update state
     G.events.trigger('state.received', [newState]);
 }
 
-function doFileLoad(file) {
+userAction.doFileLoad = (file) => {
     const reader = new FileReader();
     reader.onload = (e) => {
         const data = JSON.parse(e.target.result);
@@ -108,10 +116,10 @@ function doFileLoad(file) {
     reader.readAsText(file);
 }
 
-function doFileSave(file) {
+userAction.doFileSave = (file) => {
     const output = {
         magic: 'BP_Scenario',
-        state: BP.gui.getState()
+        state: gui.getState()
     }
     var uriContent = "data:application/octet-stream," + encodeURIComponent(JSON.stringify(output));
     var b = new Blob([JSON.stringify(output)], {type: 'application/octet-stream'});
@@ -120,8 +128,7 @@ function doFileSave(file) {
     anchor.download = "BP_Scenario.dat";
     anchor.href = window.URL.createObjectURL(b);
     anchor.onclick = (e) => {
-        const that = this;
-        setTimeout(() => window.URL.revokeObjectURL(that.href), 1500);
+        setTimeout(() => window.URL.revokeObjectURL(anchor.href), 1500);
     };
     document.body.appendChild(anchor);
     anchor.click();
@@ -129,7 +136,7 @@ function doFileSave(file) {
 }
 
 function setupNetContext(address) {
-    const context = new BP.net.Connection();
+    const context = new net.Connection();
     context.connect(address);
 
     context.on('state', (state) => {
@@ -162,4 +169,4 @@ var hostname = window.location.hostname || "localhost";
 var socketAddress = "ws://" + hostname + ":8020/";
 G.netContext = setupNetContext(socketAddress)
 
-BP.gui.initHandling();
+gui.initHandling();

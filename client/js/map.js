@@ -6,9 +6,8 @@
     Top Left is top left point of topleft tiles.
 */
 
-
-(function (BP) {
-    BP.Map = function (mapInfo) {
+export class Map {
+    constructor(mapInfo) {
         this.info = mapInfo;
 
         this.constants = {
@@ -20,14 +19,10 @@
             upperRightPixel: mapInfo.upperRightPixel,
             lowerLeftPos: mapInfo.lowerLeftPos,
             upperRightPos: mapInfo.upperRightPos
-        };
-
-        return this;
+        };        
     }
-    const mapProto = BP.Map.prototype;
-    mapProto.constructor = BP.Map;
 
-    mapProto.gameToMap = function (pos) {
+    gameToMap(pos) {
         const MC = this.constants;
         const uX = (pos[0] - MC.lowerLeftPos[0]) / MC.gameWidth,
             uY = (pos[1] - MC.lowerLeftPos[1]) / MC.gameHeight;
@@ -37,7 +32,7 @@
         return [rY, rX];
     }
 
-    mapProto.mapToGame = function (pos) {
+    mapToGame(pos) {
         var pX, pY;
         if ('lat' in pos) {
             pX = pos.lng;
@@ -51,5 +46,4 @@
         const uY = (-pY - MC.lowerLeftPixel[1]) / MC.innerHeight;
         return [uX * MC.gameWidth, uY * MC.gameHeight];
     }
-
-})(window.BP = window.BP || {});
+}

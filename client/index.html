@@ -12,26 +12,20 @@
     <link rel="stylesheet" href="css/bp.css" />
     <script src="lib/EventEmitter.js"></script>
     <script src="lib/leaflet-src.js"></script>
-    <!-- <script src="lib/L.TileLayer.NoGap.js"></script> -->
     <script src="lib/milsymbol.js"></script>
-    <script src="js/map.js"></script>
-    <script src="js/gui.js"></script>
-    <script src="js/net.js"></script>
-    <script src="js/symbol.js"></script>
-
     <link href="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.css" rel="stylesheet">
 </head>
 <body>
 
-<input type="button" onclick="doReset()" value="Reset" /><br/>
-<input type="button" onclick="doFileSave()" value="Export" /><br/>
-Load Scenario <input type="file" onchange="doFileLoad(this.files[0])" /><br/>
+<input type="button" onclick="userAction.doReset()" value="Reset" /><br/>
+<input type="button" onclick="userAction.doFileSave()" value="Export" /><br/>
+Load Scenario <input type="file" onchange="userAction.doFileLoad(this.files[0])" /><br/>
 <h3 id='connection-status'>Trying to Connect</h3>
 <!-- <div id="mapid" style="width: 600px; height: 400px;"></div> -->
 <!-- <hr/> -->
 <div id="bp_map" style="margin-left: auto; margin-right: auto; width: 80%; height: 1000px;"></div>
 
 <script src="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.js" charset="utf-8"></script>
-<script src="js/main.js"></script>
+<script src="js/main.js" type="module"></script>
 </body>
 </html>
