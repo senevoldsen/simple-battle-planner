@@ -25,13 +25,15 @@ class Room(object):
     def member_join(self, client):
         self.clients[client.cid] = client
         join_msg = {
-            'type': 'client-join',
-            'name': client.name
+            'type': 'room-client-join',
+            'client-name': client.name,
+            'client-id': client.cid,
+            'room-name': self.name
         }
-        self._broadcast_message(join_msg, exclude=client)
+        self.broadcast_message(join_msg, exclude=client)
         approve_msg = {
-            'type': 'room-joined',
-            'name': self.name,
+            'type': 'room-join-success',
+            'room-name': self.name,
             'clients': [{'name': c.name, 'cid': c.cid} for c in self.clients.values() if c != client]
         }
         self._send_message(client, approve_msg)
@@ -40,6 +42,12 @@ class Room(object):
 
     @log_method_call
     def member_leave(self, client):
+        leave_msg = {
+            'type': 'room-client-leave',
+            'client-name': client.name,
+            'client-id': client.cid,
+            'room-name': self.name
+        }
         self.clients.pop(client.cid, 'IGNORED')
         if len(self.clients) == 0:
             self.went_empty_time = datetime.datetime.now()
@@ -48,7 +56,7 @@ class Room(object):
     def send_state(self, client):
         state_msg = {
             'type': 'state',
-            'value': copy.deepcopy(self.state)
+            'state': copy.deepcopy(self.state)
         }
         self._send_message(client, state_msg)
 
@@ -69,7 +77,7 @@ class Room(object):
             'key': key,
             'value': value
         }
-        self._broadcast_message(message, exclude=client)
+        self.broadcast_message(message, exclude=client)
         self._state_modified()
 
     @log_method_call
@@ -79,7 +87,7 @@ class Room(object):
             'key': key
         }
         self.state.pop(key, 'IGNORED')
-        self._broadcast_message(message, exclude=client)
+        self.broadcast_message(message, exclude=client)
         self._state_modified()
 
     @log_method_call
@@ -88,7 +96,7 @@ class Room(object):
             'type': 'text-message',
             'text': '%s said: %s' % (from_client.name, text)
         }
-        self._broadcast_message(text, exclude)
+        self.broadcast_message(text, exclude)
 
     def _make_exclude_set(self, exclude=None):
         if exclude is None:
@@ -102,7 +110,7 @@ class Room(object):
     def _send_message(self, client, message):
         client.queue_message(message)
 
-    def _broadcast_message(self, message, exclude=None):
+    def broadcast_message(self, message, exclude=None):
         """Typical use of exclude will be the original sender"""
         excludes = self._make_exclude_set(exclude)
         for client in self.clients.values():

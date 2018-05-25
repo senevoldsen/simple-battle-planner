@@ -144,7 +144,3 @@ export class Vector extends Array {
 export function vector(...args) {
     return new Vector(...args);  
 } 
-
-window.Vector = Vector;
-window.vector = vector;
-

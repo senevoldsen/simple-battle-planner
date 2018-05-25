@@ -19,4 +19,32 @@
     border-width: 0 0 2px 0;
     border-color: black;
     border-style: solid;
-};
+}
+
+.bp-contextmenu > p.item-header {
+    text-align: center;
+    font-weight: bold;
+}
+
+/* Leaflets default rules only include paths. We add our own, but use leaflets own too */
+.leaflet-pane .bp-leaflet-interactive {
+    pointer-events: visiblePainted; /* IE 9-10 doesn't have auto */
+    pointer-events: auto;
+}
+
+#control-panel {
+    float: left;
+    width: 450px;
+}
+
+#map-container {
+    margin-left: 500px;
+    width: auto;
+}
+
+#bp_map {
+    width: 100%;
+    height: 1000px;
+    margin-left: auto;
+    margin-right: auto;
+}

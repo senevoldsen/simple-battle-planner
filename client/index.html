@@ -17,15 +17,56 @@
 </head>
 <body>
 
-<input type="button" onclick="userAction.doReset()" value="Reset" /><br/>
-<input type="button" onclick="userAction.doFileSave()" value="Export" /><br/>
-Load Scenario <input type="file" onchange="userAction.doFileLoad(this.files[0])" /><br/>
-<h3 id='connection-status'>Trying to Connect</h3>
-<!-- <div id="mapid" style="width: 600px; height: 400px;"></div> -->
-<!-- <hr/> -->
-<div id="bp_map" style="margin-left: auto; margin-right: auto; width: 80%; height: 1000px;"></div>
+<div>
+    <div id="control-panel">
+        <button id="btn-reset" class="mdc-button mdc-button--unelevated" onclick="userAction.doReset();">Reset</button><br/>
+        <br/>
+        <button id="btn-export" class="mdc-button mdc-button--unelevated" onclick="userAction.doFileSave();">Export</button><br/>
+        <br/>
+        Load Scenario <input type="file" onchange="userAction.doFileLoad(this.files[0])" /><br/>
+        <h3 id='connection-status'>Trying to Connect</h3>
+
+        <div class="mdc-text-field" data-mdc-auto-init="MDCTextField">
+            <input type="text" id="text-nickname" class="mdc-text-field__input">
+            <label class="mdc-floating-label" for="text-nickname">Displayed nickname</label>
+            <div class="mdc-line-ripple"></div>
+        </div>
+        <br/>
+        
+<!--         <div class="mdc-select" id="select-map" data-mdc-auto-init="MDCSelect">
+            <select id="hello" class="mdc-select__native-control">
+                <option value="" disabled selected></option>
+            </select>
+            <label class="mdc-floating-label">Map</label>
+            <div class="mdc-line-ripple"></div>
+        </div><br/> -->
+
+        <div class="mdc-text-field" data-mdc-auto-init="MDCTextField">
+            <input type="text" id="text-join-room" class="mdc-text-field__input">
+            <label class="mdc-floating-label" for="text-join-room">Room name to join</label>
+            <div class="mdc-line-ripple"></div>
+        </div>
+
+        <button id="btn-join-room" class="mdc-button mdc-button--unelevated" onclick="">Join Room</button><br/>
+    </div>
+    <div id="map-container">
+        <div id="bp_map"></div>
+    </div>
+</div>
+<div class="mdc-snackbar"
+     aria-live="assertive"
+     aria-atomic="true"
+     aria-hidden="true">
+  <div class="mdc-snackbar__text"></div>
+  <div class="mdc-snackbar__action-wrapper">
+    <button type="button" class="mdc-snackbar__action-button"></button>
+  </div>
+</div>
 
 <script src="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.js" charset="utf-8"></script>
 <script src="js/main.js" type="module"></script>
+<script type="text/javascript">
+    window.mdc.autoInit();
+</script>
 </body>
 </html>

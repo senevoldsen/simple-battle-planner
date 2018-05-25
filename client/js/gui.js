@@ -310,7 +310,8 @@ function constructMenu (options, onItemSelected) {
                 const elem = document.createElement('hr');
                 containerElem.appendChild(elem);
             } else if (optionData.type === 'HEADER') {
-                const elem = document.createElement('b');
+                const elem = document.createElement('p');
+                elem.className = 'item-header';
                 elem.textContent = optionData.text;
                 containerElem.appendChild(elem);
             }
@@ -370,7 +371,7 @@ function onUnitContextMenu (unit) {
     } else {
         items.push(['March', makeMoveOption('March')]);
         items.push(['Advance', makeMoveOption('Advance')]);
-        items.push(['Assault', makeMoveOption('Attack')]);
+        items.push(['Attack', makeMoveOption('Attack')]);
         items.push(['Withdraw', makeMoveOption('Withdraw')]);
     }
 
@@ -528,7 +529,6 @@ function openModifyUnitMenu (unit) {
     var lastSidc = '';
     var lastOptions = {};
     function updateSymbol() {
-        const test = mdcDialog.querySelector('#affiliation');
         const codeAffiliation = mdcDialog.querySelector('#affiliation').value;
         const codeEchelon = mdcDialog.querySelector('#land-unit-echelon').value;
         const codeEntity = mdcDialog.querySelector('#land-unit-entity').value;

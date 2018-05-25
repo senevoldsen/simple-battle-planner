@@ -1,25 +1,38 @@
 
 const notifyError = (errorMessage) => {
     console.log(errorMessage);
-}
+};
 
 const misuse = (reason) => {
     const message = 'MISUSE: ' + reason;
     notifyError(message);
-}
+};
+
+export const STATUS = {
+      DISCONNECTED: 'Disconnected'
+    , CONNECTED: 'Connected'
+    , ERROR: 'Error'
+    , CONNECTING: 'Connecting'
+};
+
 
 export class Connection extends EventEmitter {
     constructor() {
         super();
         this.socket = null;
         this.address = null;
-        this._status = 'DISCONNECTED';
+        this._status = STATUS.DISCONNECTED;
         this._closeReason = undefined;
         this.handlers = Object.create(null);
         this._setupHandlers();
     }
 
     _setupHandlers() {
+
+        const forward = type => {
+            this.handlers[type] = msg => this.trigger(type, [msg]);
+        };
+
         /* 
             Room state management
             
@@ -30,19 +43,26 @@ export class Connection extends EventEmitter {
                 set-key: key, value
                 delete-key: key
         */
-        this.handlers['state'] = (msg) => this.trigger('state', [msg.value]);
-        this.handlers['key-set'] = (msg) => this.trigger('key-set', [msg]);
-        this.handlers['key-delete'] = (msg) => this.trigger('key-delete', [msg]);
+        forward('state');
+        forward('key-set');
+        forward('key-delete');
 
         /*
             Room management
 
                 room-created: name 
-                room-joined: name, client-id   --- Your assigned client-id
+                room-join-success: room-name, clients{name: ..., cid: ... }
+                room-join-failed: room-name, reason
                 room-client-join: room-name, client-id, client-name  -- joining client's id
-                room-client-leave: room-name, client-id -- leaving client's id
+                room-client-leave: room-name, client-id, client-name -- leaving client's id
                 room-closed: name, reason
         */
+        forward('room-created');
+        forward('room-join-success');
+        forward('room-join-failed');
+        forward('room-client-join');
+        forward('room-client-leave');
+        forward('room-closed');
 
         /*
             Misc management
@@ -63,7 +83,7 @@ export class Connection extends EventEmitter {
         const socket = this.socket;
 
         socket.onopen = (event) => {
-            this._changeStatus('CONNECTED');
+            this._changeStatus(STATUS.CONNECTED);
         }
 
         socket.onmessage = (event) => {           
@@ -78,6 +98,7 @@ export class Connection extends EventEmitter {
                 return;
             }
             try {
+                console.log(msg);
                 var handler = this.handlers[msg.type];
                 if (handler) {
                     handler(msg);
@@ -100,11 +121,11 @@ export class Connection extends EventEmitter {
 
         socket.onclose = (event) => {
             this._closeReason = event.reason;
-            this._changeStatus('DISCONNECTED');
+            this._changeStatus(STATUS.DISCONNECTED);
         };
 
         socket.onerror = (event) => {
-            this._changeStatus('ERROR');
+            this._changeStatus(STATUS.ERROR);
         };
     }
 
@@ -113,7 +134,7 @@ export class Connection extends EventEmitter {
     }
 
     isConnected() {
-        return this._status === 'CONNECTED';
+        return this._status === STATUS.CONNECTED;
     }
 
     connect(address) {
@@ -123,7 +144,7 @@ export class Connection extends EventEmitter {
         this.address = address;
         this.socket = new WebSocket(this.address);
         this._addSocketEvents();
-        this._changeStatus('CONNECTING');
+        this._changeStatus(STATUS.CONNECTING);
     }
 
     close() {

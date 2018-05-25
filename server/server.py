@@ -80,6 +80,9 @@ class Server(object):
         new_room.try_load_state()
         return new_room
 
+    def get_room(self, name):
+        return self.rooms.get(name, None)
+
     # Currently overwrites e.g. not adding
     def add_handler(self, msg_type, func):
         self.message_handlers[msg_type] = func
@@ -98,6 +101,7 @@ class Server(object):
         cid, self._next_cid = self._next_cid, self._next_cid + 1
         client = Client(cid, websocket)
         self.clients[cid] = client
+        client.name = 'Unknown #%d' % client.cid
         client.room = self.default_room
         client.room.member_join(client)
         return client
@@ -139,23 +143,34 @@ def message_handler(server, msg_type):
 @message_handler(main_server, 'room-join')
 def on_room_join(client, data):
     room_name = data['room-name']
-    nickname = data['username']
-
-    # Create room if not exists
-    if room_name not in rooms:
-        new_room = rooms[room_name] = Room(room_name)
+    new_room = main_server.get_room(room_name)
+    if new_room is None:
+        reply = {
+            'type': 'room-join-failed',
+            'room-name': room_name,
+            'reason': 'Room does not exist'
+        }
+        client.queue_message(reply)
     else:
-        new_room = rooms[room_name]
+        # Update client data
+        if nickname:
+            client.name = data.get('username', client.name)
+        if client.room is not None:
+            client.room.member_leave(client)
+        new_room.member_join(client)
+        client.room = new_room
 
-    if client.room is not None:
-        client.room.member_leave(client)
 
-    # Update client data
-    client.name = nickname
-    client.room = new_room
-
-    # Join new room
-    new_room.member_join(client)
+@message_handler(main_server, 'room-client-setname')
+def on_room_client_setname(client, data):
+    new_name = data['username']
+    message = {
+        'type': 'room-client-setname',
+        'client-id': client.cid,
+        'client-name': new_name
+    }
+    if client.room:
+        client.room.broadcast_message(message)
 
 
 @message_handler(main_server, 'room-create')
@@ -169,7 +184,7 @@ def on_text_message(client, data):
 def on_state(client, data):
     room = client.room
     if room:
-        room.force_set_state(data['value'], exclude=client)
+        room.force_set_state(data['state'], exclude=client)
     else:
         log.warning('No room to forward state to')
 
@@ -214,7 +229,7 @@ async def handle_message(client, message):
         error = True
     if error:
         log.debug('Unknown message type received: %s', msg_type)
-        reply = json.dumps({'type': 'error', 'text': 'Bad message'})
+        reply = {'type': 'error', 'text': 'Bad message'}
         await client.queue_message(reply)
 
 
