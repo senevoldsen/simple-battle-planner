@@ -1,21 +1,19 @@
 import * as symbol from './symbol.js';
 import * as bpleaf from './leaflet/movesegment.js';
+import * as guiOrder from './gui.order.js';
 
 
 export class GuiObject {
     constructor(oid) {
         this.oid = oid;
+    
     }
-    toJSON() {
-        throw Error('toJSON must be overridden');
-    }
-
-    updateFromJSON(json) {
-        throw Error('updateFromJSON must be overridden');
+    serialize() {
+        throw Error('serialize must be overridden');
     }
 
-    static fromJSON(json) {
-        throw Error('fromJSON must be overridden');
+    static deserialize(json) {
+        throw Error('deserialize must be overridden');
     }
 
     // Restore current state to map
@@ -36,47 +34,61 @@ export class Unit extends GuiObject {
         this.pos = [0, 0];
         this.isDraggable = false;
         this._guiState = {};
-        this.order = null;
+        this._orders = [];
         // Optionally set elsewhere
         //this.options = {};
     }
 
-    get _serializeProperties() {
-        return ['oid', 'identifier', 'pos', 'isDraggable', 'options','order'];
+    serialize(encoder) {
+        encoder.store('oid', this.oid);
+        encoder.store('identifier', this.identifier);
+        encoder.store('pos', this.pos);
+        encoder.store('isDraggable', this.isDraggable);
+        encoder.store('orders', this._orders);
+        if (this.options) {
+            encoder.store('options', this.options);
+        }
     }
 
-    toJSON() {
-        const result = {};
-        this._serializeProperties.forEach((propName) => {
-            if (propName in this) {
-                result[propName] = this[propName];
-            }
-        });
+    static deserialize(decoder) {
+        const oid = decoder.get('oid');
+        const identifier = decoder.get('identifier');
+        const result = new Unit(oid, identifier);
+        result.pos = decoder.get('pos', result.pos);
+        result.isDraggable = decoder.get('isDraggable', result.isDraggable);
+        result._orders = decoder.get('orders', []);
         return result;
     }
 
-    updateFromJSON(json) {
-        this._serializeProperties.forEach((propName) => {
-            if (propName in json) {
-                this[propName] = json[propName];
-            }
-        });
+    addOrder(order) {
+        this._orders.push(order);
     }
 
-    static fromJSON(json) {
-        const unit = new Unit(json.oid, json.identifier);
-        unit.updateFromJSON(json);
-        return unit;
+    removeOrder(order) {
+        const index = this._orders.indexOf(order);
+        if (index > -1) {
+            this._orders.splice(index, 1);
+            order.removeFromGui();
+        }
+    }
+
+    removeAllOrders() {
+        this._orders.forEach(order => this.removeOrder(order));
+    }
+
+    get numberOfOrders() {
+        return this._orders.length;
     }
 
     updateGui() {
         this.removeFromGui();
         // Create marker
         const icon = getIconForUnit(this);
+
         const leafPos = L.latLng(G.bpMap.gameToMap(this.pos));
         const marker = L.marker(leafPos, {icon: icon, draggable: this.isDraggable});
         marker.addTo(G.markerLayer);
-
+        
         marker.on('contextmenu', (event) => {
             onUnitContextMenu(this);
         });
@@ -85,19 +97,7 @@ export class Unit extends GuiObject {
             this.pos = G.bpMap.mapToGame(marker.getLatLng());
             markModified(this);
         });
-
-        // Handle order
-        if (this.order) {
-            const order = this.order;
-            const moveDest = L.latLng(G.bpMap.gameToMap(order.destination));
-            const moveLayer = new bpleaf.PolyArrow([leafPos, moveDest], {
-                color: this._getSideColor(),
-                text: order.moveType.toUpperCase()
-            });
-            this._guiState.moveLayer = moveLayer;
-            moveLayer.addTo(G.markerLayer);
-        }
-
+        this._orders.forEach(order => order.updateGui());
         this._guiState.unitMarker = marker;
     }
 
@@ -106,13 +106,10 @@ export class Unit extends GuiObject {
             G.markerLayer.removeLayer(this._guiState.unitMarker);
             this._guiState.unitMarker = null;
         }
-        if (this._guiState.moveLayer) {
-            G.markerLayer.removeLayer(this._guiState.moveLayer);
-            this._guiState.moveLayer = null;
-        }
+        this._orders.forEach(order => order.removeFromGui());
     }
 
-    _getSideColor() {
+    getSideColor() {
         const _colors = {
               'Pending': 'yellow'
             , 'Unknown': 'yellow'
@@ -219,25 +216,18 @@ export function processObject (oid, data) {
             delete objectState[oid];
         }
     } else {
-        if (existing === null) {
-            existing = Unit.fromJSON(data);
-            objectState[oid] = existing;
-        } else {
-            existing.updateFromJSON(data);
+        // TODO: optimize this better.
+        if (existing) {
+            existing.removeFromGui();
         }
-        existing.updateGui();
+        objectState[oid] = data;
+        data.updateGui();
     }
 };
 
 export function getState () {
-    const stateCopy = JSON.parse(JSON.stringify(objectState));
-    return stateCopy;
-};
-
-function ensureDeleted (oid) {
-    if (objectState[oid]) {
-        delete objectState[oid];
-    }
+    // Warning: reference to real state
+    return objectState;    
 };
 
 /*
@@ -321,6 +311,34 @@ function constructMenu (options, onItemSelected) {
     return containerElem;
 };
 
+function getUnitMoveOrders (unit, callback) {
+    const makeMoveOption = (moveType) => {
+        return () => {
+            const map = G.leafMap;
+            const onClick = (e) => {
+                map.off('click', onClick);
+                const mapPos = e.latlng;
+                const gamePos = G.bpMap.mapToGame(mapPos);
+                const order = new guiOrder.MoveOrder(
+                    unit.pos,
+                    gamePos,
+                    unit.getSideColor(),
+                    moveType.toUpperCase()
+                );
+                callback(order);
+            };
+            map.on('click', onClick);
+        };
+    };
+    const menuItems = [
+        'March',
+        'Advance',
+        'Attack',
+        'Withdraw'
+    ].map(name => [name, makeMoveOption(name)]);
+    return menuItems;
+};
+
 function onUnitContextMenu (unit) {
     const items = [
         ['Delete', () => {
@@ -346,33 +364,18 @@ function onUnitContextMenu (unit) {
     items.push({type: 'SEPARATOR'});
     items.push({type: 'HEADER', text: 'Orders'});
 
-    const makeMoveOption = (moveType) => {
-        return () => {
-            const map = G.leafMap;
-            const onClick = (e) => {
-                map.off('click', onClick);
-                const mapPos = e.latlng;
-                const gamePos = G.bpMap.mapToGame(mapPos);
-                unit.order = {
-                    destination: gamePos,
-                    moveType: moveType
-                };
-                markModified(unit);
-            };
-            map.on('click', onClick);
-        };
+    const onMoveSelectedCallback = order => {
+        unit.addOrder(order);
+        markModified(unit);
     };
 
-    if (unit.order) {
+    if (unit.numberOfOrders > 0) {
         items.push(['Remove Order', () => {
-            unit.order = null;
+            unit.removeAllOrders();
             markModified(unit);
         }]);
     } else {
-        items.push(['March', makeMoveOption('March')]);
-        items.push(['Advance', makeMoveOption('Advance')]);
-        items.push(['Attack', makeMoveOption('Attack')]);
-        items.push(['Withdraw', makeMoveOption('Withdraw')]);
+        getUnitMoveOrders(unit, onMoveSelectedCallback).forEach(menuItem => items.push(menuItem));
     }
 
     const map = G.leafMap;

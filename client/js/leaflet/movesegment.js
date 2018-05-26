@@ -50,6 +50,16 @@ export var PolyArrow = leafSVG.SvgMarker.extend({
         this._pathElem = leafSVG.createSvgElem('path');        
         this._gElem.appendChild(this._pathElem);
         this._reset();
+
+        this.on('contextmenu', (e) => {
+            const numPoints = this._latLngs.length;
+            if (numPoints == 0) return;
+            // Extend event
+            e.polyArrow = this;
+            e.polyArrowEndPos = this._latLngs[numPoints-1];
+            L.DomEvent.stop(e);
+            this.fire('arrow-contextmenu', e);
+        }); 
     },
 
     onRemove: function () {
@@ -75,10 +85,16 @@ export var PolyArrow = leafSVG.SvgMarker.extend({
 
         // Add interact area
         // -- Remove previous interact area
-        Array.from(this._gElem.querySelectorAll('path.bp-movesegment-interact-arrow')).forEach((elem) => this._gElem.removeChild(elem));
-        const interactElem = this._makeInteractElem();
-        if (interactElem) {
-            this._gElem.appendChild(interactElem);    
+        Array.from(this._gElem.querySelectorAll('.bp-movesegment-interact-arrow')).forEach((elem) => {
+            this._gElem.removeChild(elem);
+            this.removeInteractiveTarget(elem);
+        });
+        if (this.listens('arrow-contextmenu') || true) {
+            const interactElem = this._makeInteractElem();
+            if (interactElem) {
+                this._gElem.appendChild(interactElem);    
+                this.addInteractiveTarget(interactElem);
+            }
         }
     },
 

@@ -1,8 +1,10 @@
 import {Map} from './map.js';
 import * as net from './net.js';
 import * as gui from './gui.js';
+import * as guiOrder from './gui.order.js';
 import * as testLeaflet from './leaflet/movesegment.js';
 import * as leafMapGrid from './leaflet/map-grid.js';
+import * as util from './util.js';
 
 /*
 TODO: Try to move modify symbol dialog into html instead.
@@ -66,15 +68,18 @@ mapConfigs.marenice = {
 const G = window.G = {};
 // Wire state events together
 G.events = new EventEmitter();
-// Leaflet objects
+
 G.bpMap = null;
 G.tileLayer = null;
-// G.currentMap = 'staszow';
 G.currentMap = 'marenice';
 G.leafMap = L.map('bp_map', {crs: L.CRS.Simple});
 G.axisLayer = L.layerGroup().addTo(G.leafMap);
 G.markerLayer = L.layerGroup().addTo(G.leafMap);
 G.currentRoom = null;
+
+G.codec = new util.DictionaryCodec();
+G.codec.addDeserializer('Unit', gui.Unit.deserialize);
+G.codec.addDeserializer('MoveOrder', guiOrder.MoveOrder.deserialize);
 
 function changeMap(mapName) {
     G.bpMap = new Map(mapConfigs[mapName]);
@@ -106,8 +111,12 @@ function changeMap(mapName) {
 changeMap(G.currentMap);
 
 function setupGuiEvents() {
+
+    const encode = x => G.codec.serialize(x);
+    const decode = x => G.codec.deserialize(x);
+
     G.events.on('gui.object.created', (object) => {
-        G.netContext.send({type: 'key-set', key: object.oid, value: object});
+        G.netContext.send({type: 'key-set', key: object.oid, value: encode(object)});
     });
 
     G.events.on('gui.object.deleted', (object) => {
@@ -115,22 +124,22 @@ function setupGuiEvents() {
     });
 
     G.events.on('gui.object.updated', (object) => {
-        G.netContext.send({type: 'key-set', key: object.oid, value: object});
+        G.netContext.send({type: 'key-set', key: object.oid, value: encode(object)});
     });
 
     G.events.on('state.received', (remoteState) => {
-        gui.processState(remoteState);
+        gui.processState(decode(remoteState));
     });
 
     G.events.on('state.send', (state) => {
         G.netContext.send({
             type: 'state',
-            state: state
+            state: encode(state)
         });
     });
 
     G.events.on('remote.object.updated', (data) => {
-        gui.processObject(data.oid, data.object);
+        gui.processObject(data.oid, decode(data.object));
     });
 }
 
@@ -160,11 +169,10 @@ userAction.doFileLoad = (file) => {
 }
 
 userAction.doFileSave = (file) => {
-    const output = {
+    const output = G.codec.serialize({
         magic: 'BP_Scenario',
-        state: gui.getState()
-    }
-    var uriContent = "data:application/octet-stream," + encodeURIComponent(JSON.stringify(output));
+        state: G.codec.serialize(gui.getState())
+    });
     var b = new Blob([JSON.stringify(output)], {type: 'application/octet-stream'});
 
     var anchor = document.createElement('a');

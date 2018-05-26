@@ -1,5 +1,5 @@
 /*
-    In Leaflet TileLayer 
+    In Leaflet with CRS.Simple:
         - lat decreases when going down
         - lng increases when going right
 
