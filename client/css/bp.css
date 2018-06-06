@@ -34,11 +34,11 @@
 
 #control-panel {
     float: left;
-    width: 450px;
+    width: 250px;
 }
 
 #map-container {
-    margin-left: 500px;
+    margin-left: 300px;
     width: auto;
 }
 

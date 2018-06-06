@@ -36,7 +36,7 @@ export class Unit extends GuiObject {
         this._guiState = {};
         this._orders = [];
         // Optionally set elsewhere
-        //this.options = {};
+        this.options = {};
     }
 
     serialize(encoder) {
@@ -57,6 +57,7 @@ export class Unit extends GuiObject {
         result.pos = decoder.get('pos', result.pos);
         result.isDraggable = decoder.get('isDraggable', result.isDraggable);
         result._orders = decoder.get('orders', []);
+        result.options = decoder.get('options', {});
         return result;
     }
 
@@ -82,6 +83,8 @@ export class Unit extends GuiObject {
 
     updateGui() {
         this.removeFromGui();
+        this._updateOrderProperties();
+
         // Create marker
         const icon = getIconForUnit(this);
 
@@ -122,6 +125,15 @@ export class Unit extends GuiObject {
         const code = new symbol.SymbolCode(this.identifier);
         const desc = code.getDescription();
         return _colors[desc.identity];
+    }
+
+    _updateOrderProperties() {
+        // TODO: this should probably be refactored out later when more order types
+        if (this._orders.length == 0) return;
+        // If first order is move type update it's from position
+        if (this._orders[0] instanceof guiOrder.MoveOrder) {
+            this._orders[0].from = Array.from(this.pos);
+        }
     }
 }
 
