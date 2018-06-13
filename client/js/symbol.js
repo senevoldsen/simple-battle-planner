@@ -208,9 +208,12 @@ Object.entries({
     , 'Infantry': '121100'
     , 'Infantry - Motorized': '121104'
     , 'Infantry - Mechanized': '121102'
-    , 'Cavalry': '121300'
+    , 'Recon/Cavalry': '121300'
     , 'Antitank': '120400'
     , 'Armoured': '120500'
+    , 'Artillery': '130300'
+    , 'Artillery - Self-Propelled': '130301'
+    , 'Air Defence': '130100'
 }).forEach(([text, code]) => LAND_UNIT_ENTITY.add(text, code));
 
 Object.entries({

@@ -35,8 +35,13 @@ export class Unit extends GuiObject {
         this.isDraggable = false;
         this._guiState = {};
         this._orders = [];
-        // Optionally set elsewhere
-        this.options = {};
+        /* Options are more specific entries to the symbol. E.g.
+            - higherFormation
+            - designation
+        */
+        this.options = {}; 
+        /* Stats are various entries shown when selected */
+        this.stats = {};
     }
 
     serialize(encoder) {
@@ -45,9 +50,8 @@ export class Unit extends GuiObject {
         encoder.store('pos', this.pos);
         encoder.store('isDraggable', this.isDraggable);
         encoder.store('orders', this._orders);
-        if (this.options) {
-            encoder.store('options', this.options);
-        }
+        encoder.store('options', this.options);
+        encoder.store('stats', this.stats);
     }
 
     static deserialize(decoder) {
@@ -58,6 +62,7 @@ export class Unit extends GuiObject {
         result.isDraggable = decoder.get('isDraggable', result.isDraggable);
         result._orders = decoder.get('orders', []);
         result.options = decoder.get('options', {});
+        result.stats = decoder.get('stats', []);
         return result;
     }
 
@@ -92,6 +97,10 @@ export class Unit extends GuiObject {
         const marker = L.marker(leafPos, {icon: icon, draggable: this.isDraggable});
         marker.addTo(G.markerLayer);
         
+        marker.on('click', (event) => {
+            this._showStatus();
+        });
+
         marker.on('contextmenu', (event) => {
             onUnitContextMenu(this);
         });
@@ -135,15 +144,75 @@ export class Unit extends GuiObject {
             this._orders[0].from = Array.from(this.pos);
         }
     }
+
+    _showStatus() {
+        // const stats = [
+        //     {type: 'ratio', text: 'Manpower', value: '84 / 126'},
+        //     {type: 'ratio', text: 'Ammunition', value: '56 / 100'},
+        //     {type: 'ratio', text: 'Fatigue', value: '78 / 100', higherIsWorse: true}
+        // ];
+        // this.stats = stats;
+
+        const lerp = (a, b, f) => a*(1-f) + b*f;
+
+        function redToGreen(fraction, higherIsBetter=true) {
+            fraction = higherIsBetter ? fraction : (1 - fraction);
+            if (fraction < 0.5) {
+                return `rgb(255,${lerp(0, 255, fraction*2)},0)`;
+            }
+            return `rgb(${lerp(255, 0, (fraction-0.5)*2)}, 255, 0)`;
+        }
+
+        function makeRatio(data) {
+            const [x, y] = data.value.split('/').map(x => parseFloat(x.trim()));
+            const fraction = x / y;
+            const container = document.createElement('div');
+            container.className += ' bp-bar-container';
+            const bar = document.createElement('p');
+            bar.className += ' bp-bar';
+            bar.style.backgroundColor = redToGreen(fraction, !data.higherIsWorse);
+            bar.style.width = (fraction * 100) + '%';
+            const text = document.createElement('span');
+            text.textContent = data.text ? data.text + ' ' + data.value : '';
+
+            bar.appendChild(text);
+            container.appendChild(bar);
+            return container;
+        };
+
+        const fieldMakers = {
+            'ratio': makeRatio
+        };
+
+        const map = G.leafMap;
+        const mapPos = new L.latLng(G.bpMap.gameToMap(this.pos));
+        const popup = L.popup({minWidth: 300, maxWidth: 500});
+
+        const containerElem = document.createElement('div');
+        containerElem.className += ' bp-contextmenu bp-contextmenu-unit-status';
+
+        const headerElem = document.createElement('h1');
+        headerElem.className = 'header';
+        headerElem.textContent = 'Unit Status';
+        containerElem.appendChild(headerElem);
+
+        this.stats.forEach(entry => containerElem.appendChild(fieldMakers[entry.type](entry)));
+
+        popup.setLatLng(mapPos)
+            .setContent(containerElem)
+            .openOn(map);
+    }
 }
 
 function randomElem(arr) {
     return arr[Math.floor(Math.random() * arr.length)];
 }
 
+
 const objectState = Object.create(null);
 var guiModifiedObjects = Object.create(null);
 var guiModifyHandler = null;
+var guiPointers = Object.create(null);
 
 export function getObjectId (prefix) {
     var unique = false;
@@ -235,6 +304,37 @@ export function processObject (oid, data) {
         objectState[oid] = data;
         data.updateGui();
     }
+};
+
+export function processPointing (data) {
+    const cid = data['client-id'];
+    const removeDelayMs = 1000;
+    let entry = guiPointers[cid];
+
+    const deleteEntry = () => {
+        const entry = guiPointers[cid];
+        if (entry) {
+            entry.layer.remove();
+        }
+        delete guiPointers[cid];
+    };
+
+    if (!entry) {
+        entry = guiPointers[cid] = {};
+        entry.layer = L.circleMarker(L.latLng([0,0]), {
+            radius: 10,
+            color: 'red',
+            fillColor: 'yellow',
+            fillOpacity: 0.6
+        });
+        entry.layer.addTo(G.leafMap);
+    }
+
+    entry.layer.setLatLng(G.bpMap.gameToMap(data.pos));
+    if (entry.removeCallback) {
+        window.clearTimeout(entry.removeCallback);
+    }
+    entry.removeCallback = window.setTimeout(deleteEntry, removeDelayMs);
 };
 
 export function getState () {
@@ -536,8 +636,8 @@ function openModifyUnitMenu (unit) {
     trySelect('#land-units-modifier_1', symbolDesc.modifier1);
     trySelect('#land-units-modifier_2', symbolDesc.modifier2);
 
-    containerElem.querySelector('#designation').value = unit.options ? unit.options.uniqueDesignation : '';
-    containerElem.querySelector('#higher-formation').value = unit.options ? unit.options.higherFormation : '';
+    containerElem.querySelector('#designation').value = unit.options && unit.options.uniqueDesignation || '';
+    containerElem.querySelector('#higher-formation').value = unit.options && unit.options.higherFormation || '';
 
 
     // Preview
@@ -584,8 +684,161 @@ function openModifyUnitMenu (unit) {
     updateSymbol();
 };
 
+
+class ActivityStack {
+    constructor() {
+        this._activities = [];
+    }
+
+    getCurrent() {
+        return this._activities[this.count()-1];
+    }
+
+    count() {
+        return this._activities.length;
+    }
+
+    push(activity) {
+        if (this.count() > 0) {
+            this.getCurrent().handleEvent('pause', {});
+        }
+        this._activities.push(activity);
+        this.getCurrent().handleEvent('start', {});
+    }
+
+    pop(activity) {
+        let didRemove = false;
+        let didRemoveCurrent = false;
+        if (activity) {
+            let index = this._activities.slice().reverse().indexOf(activity);
+            if (index >= 0) {
+                // Unreverse index
+                index = this._activities.length - 1 - index;
+                this._activities.splice(index);
+                didRemove = true;
+            }
+            didRemoveCurrent = index === (this._activities.length-1);
+        } else {
+            this._activities.pop();
+            didRemove = true;
+            didRemoveCurrent = true;
+        }
+        if (didRemoveCurrent && this.count() > 0) {
+            this.getCurrent().handleEvent('resume', {});
+        }
+        return didRemove;
+    }
+
+    handleEvent(name, event) {
+        this.getCurrent().handleEvent(name, event);
+    }
+}
+
+const defaultActivity = (() => {
+    const handledEvents = Object.create(null);
+
+    handledEvents['rightclick.map'] = e => onMapContextMenu(e.latlng);
+    handledEvents['mousedown.map'] = e => {
+        e.originalEvent.stopPropagation();
+        const isCtrlDown = e.originalEvent.ctrlKey && !e.originalEvent.altKey && !e.originalEvent.shiftKey;
+        if (isCtrlDown) {
+            G.activityStack.push(new PointActivity(e.latlng));
+        }
+    };
+
+    const _activity = {
+        handleEvent(type, event) {
+            const handler = handledEvents[type];
+            if (handler) {
+                handler(event);
+            }
+        }
+    };
+    return _activity;
+})();
+
+// Point Activity lets other users to see where you are pointing
+class PointActivity {
+
+    constructor(initialLatLng) {
+        this._handledEvents = Object.create(null);
+        this._setupEvents();
+        this._pos = [0, 0];
+        this._lastTriggeredMs = -99999;
+        this._lastTriggeredPos = this._pos;
+        this._maxInterval = 1000 / 2;
+        this._minInterval = 1000 / 25;
+        this._intervalCallbackId = window.setInterval(() => this._update(), Math.round(this._minInterval));
+        if (initialLatLng) {
+            this._handleMove(initialLatLng);
+            this._update();
+        }
+    }
+
+    _setupEvents() {
+        this._handledEvents['mouseup'] = e => this._stop();
+        this._handledEvents['mouseout'] = e => this._stop();
+        this._handledEvents['mousemove'] = e => this._handleMove(e.latlng);
+        const dragging = G.leafMap.dragging;
+        this._reenableDrag = dragging.enabled();
+        dragging.disable();
+    }
+
+    _update() {
+        const [prevX, prevY] = this._lastTriggeredPos;
+        const [x, y] = this._pos;
+        const nowMs = new Date().getTime();
+        if (x !== prevX || y !== prevY || (nowMs - this._lastTriggeredMs > this._maxInterval)) {
+            this._lastTriggeredMs = nowMs;
+            G.events.trigger('gui.pointing', [{
+                pos: [x, y]
+            }]);
+        }
+        this._lastTriggeredPos = this._pos;
+    }
+
+    _stop() {
+        window.clearInterval(this._intervalCallbackId);
+        if (this._reenableDrag) {
+            G.leafMap.dragging.enable();
+        }
+        G.activityStack.pop(this);
+    }
+
+    _handleMove(pos) {
+        this._pos = G.bpMap.mapToGame(pos);
+    }
+
+    handleEvent(type, event) {
+        const handler = this._handledEvents[type];
+        if (handler) {
+            handler(event);
+        }
+    }
+}
+
 export function initHandling () {
-    G.leafMap.on('contextmenu', (e) => {
-        onMapContextMenu(e.latlng);
-    });
+    G.activityStack = new ActivityStack();
+
+    const sendEvent = (n, e) => {
+        n = n.toLowerCase();
+        G.activityStack.handleEvent(n, e);
+        const simpleEvent = n.split('.', 1)[0];
+        if (simpleEvent !== n) {
+            G.activityStack.handleEvent(simpleEvent, e);
+        }
+    };
+
+    G.leafMap.on('click', e => sendEvent('click.map', e));
+    G.leafMap.on('dblclick', e => sendEvent('dblclick.map', e));
+    G.leafMap.on('mousedown', e => sendEvent('mousedown.map', e));
+    G.leafMap.on('mouseup', e => sendEvent('mouseup.map', e));
+    G.leafMap.on('mouseover', e => sendEvent('mouseover.map', e));
+    G.leafMap.on('mouseout', e => sendEvent('mouseout.map', e));
+    G.leafMap.on('mousemove', e => sendEvent('mousemove.map', e));
+    G.leafMap.on('contextmenu', e => sendEvent('rightclick.map', e));
+    G.leafMap.on('keypress', e => sendEvent('keypress.map', e));
+    // G.leafMap.on('preclick', e => sendEvent('rightclick.map', e));
+
+    G.activityStack.push(defaultActivity);
 };

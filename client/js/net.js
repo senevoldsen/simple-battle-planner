@@ -51,7 +51,7 @@ export class Connection extends EventEmitter {
             Room management
 
                 room-created: name 
-                room-join-success: room-name, clients{name: ..., cid: ... }
+                room-join-success: room-name, client-id, clients{name: ..., cid: ... }  -- your assigned client id
                 room-join-failed: room-name, reason
                 room-client-join: room-name, client-id, client-name  -- joining client's id
                 room-client-leave: room-name, client-id, client-name -- leaving client's id
@@ -68,7 +68,13 @@ export class Connection extends EventEmitter {
             Misc management
 
                 text-message: text, client-id
-        */      
+                transient: ...data
+                    subtypes:
+                        pointing
+                            pos
+                            client-id
+        */
+        forward('transient');
     }
 
     _changeStatus(newStatus) {
@@ -98,7 +104,6 @@ export class Connection extends EventEmitter {
                 return;
             }
             try {
-                console.log(msg);
                 var handler = this.handlers[msg.type];
                 if (handler) {
                     handler(msg);

@@ -10,6 +10,9 @@ import * as util from './util.js';
 TODO: Try to move modify symbol dialog into html instead.
 CONSIDER: different detail level depending on map zoom.
 
+NEED: Freedrawing
+NEED: Multistage orders
+
 TODO: Clean up unused gui state
 */
 var mapConfigs = {};
@@ -76,6 +79,7 @@ G.leafMap = L.map('bp_map', {crs: L.CRS.Simple});
 G.axisLayer = L.layerGroup().addTo(G.leafMap);
 G.markerLayer = L.layerGroup().addTo(G.leafMap);
 G.currentRoom = null;
+G.client = {id: null};
 
 G.codec = new util.DictionaryCodec();
 G.codec.addDeserializer('Unit', gui.Unit.deserialize);
@@ -141,6 +145,21 @@ function setupGuiEvents() {
     G.events.on('remote.object.updated', (data) => {
         gui.processObject(data.oid, decode(data.object));
     });
+
+    G.events.on('remote.pointing', (data) => {
+        gui.processPointing(data);
+    });
+
+    G.events.on('gui.pointing', (data) => {
+        // TODO: process pointing
+        G.netContext.send({
+            type: 'transient',
+            'sub-type': 'pointing',
+            pos: data.pos,
+            'client-id': G.client.id
+        });
+        gui.processPointing(data);
+    });
 }
 
 setupGuiEvents();
@@ -205,6 +224,15 @@ function setupNetContext(address) {
         G.events.trigger('remote.object.updated', [{oid: key, object: null}]);
     });
 
+    context.on('transient', (data) => {
+        const subType = data['sub-type'];
+        if (data['sub-type'] === 'pointing') {
+            G.events.trigger('remote.pointing', [data]);
+            return;
+        }
+        console.log(`Unhandled transient type '${subType}'`);
+    });
+
     let isConnected = false;
     const updateStatusElem = (e) => {
         const elem = document.getElementById('connection-status');
@@ -226,6 +254,8 @@ function setupNetContext(address) {
     context.on('room-join-success', (e) => {
         G.currentRoom = e['room-name'];
         updateStatusElem();
+        G.client.id = e['client-id'];
+        console.log(G.client);
     });
     updateStatusElem();
 

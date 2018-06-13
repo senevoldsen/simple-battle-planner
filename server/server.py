@@ -201,6 +201,13 @@ def key_delete(client, data):
         client.room.delete_key(client, data['key'])
 
 
+# A transient is not permanent, and only forward to current room members
+@message_handler(main_server, 'transient')
+def on_transient(client, data):
+    if client.room:
+        client.room.broadcast_message(data, exclude=client)
+
+
 async def consumer_handler(client):
     while True:
         try:

@@ -34,6 +34,7 @@ class Room(object):
         approve_msg = {
             'type': 'room-join-success',
             'room-name': self.name,
+            'client-id': client.cid,
             'clients': [{'name': c.name, 'cid': c.cid} for c in self.clients.values() if c != client]
         }
         self._send_message(client, approve_msg)

@@ -26,6 +26,26 @@
     font-weight: bold;
 }
 
+.bp-contextmenu .bp-bar-container {
+    background-color: #cccccc;
+    margin-top: 4px;
+    margin-bottom: 4px;
+}
+
+.bp-contextmenu .bp-bar {
+    height: 20px;
+    color: #eeeeee;
+    color: blue;
+    margin: 0px;
+    padding: 0px;
+
+    font-weight: 700;
+    color: blue;
+    text-align: center;
+    vertical-align: middle;
+}
+
+
 /* Leaflets default rules only include paths. We add our own, but use leaflets own too */
 .leaflet-pane .bp-leaflet-interactive {
     pointer-events: visiblePainted; /* IE 9-10 doesn't have auto */
