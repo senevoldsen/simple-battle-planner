@@ -21,6 +21,11 @@
     border-style: solid;
 }
 
+.bp-contextmenu .fallback-message {
+    font-weight: bold;
+    text-align: center;
+}
+
 .bp-contextmenu > p.item-header {
     text-align: center;
     font-weight: bold;

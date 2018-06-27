@@ -41,7 +41,7 @@ export class Unit extends GuiObject {
         */
         this.options = {}; 
         /* Stats are various entries shown when selected */
-        this.stats = {};
+        this.stats = [];
     }
 
     serialize(encoder) {
@@ -98,11 +98,15 @@ export class Unit extends GuiObject {
         marker.addTo(G.markerLayer);
         
         marker.on('click', (event) => {
-            this._showStatus();
+            triggerGuiEvent('click.unit', {
+                unit: this
+            });
         });
 
         marker.on('contextmenu', (event) => {
-            onUnitContextMenu(this);
+            triggerGuiEvent('rightclick.unit', {
+                unit: this
+            });
         });
         
         marker.on('moveend', (event) => {
@@ -144,75 +148,25 @@ export class Unit extends GuiObject {
             this._orders[0].from = Array.from(this.pos);
         }
     }
-
-    _showStatus() {
-        // const stats = [
-        //     {type: 'ratio', text: 'Manpower', value: '84 / 126'},
-        //     {type: 'ratio', text: 'Ammunition', value: '56 / 100'},
-        //     {type: 'ratio', text: 'Fatigue', value: '78 / 100', higherIsWorse: true}
-        // ];
-        // this.stats = stats;
-
-        const lerp = (a, b, f) => a*(1-f) + b*f;
-
-        function redToGreen(fraction, higherIsBetter=true) {
-            fraction = higherIsBetter ? fraction : (1 - fraction);
-            if (fraction < 0.5) {
-                return `rgb(255,${lerp(0, 255, fraction*2)},0)`;
-            }
-            return `rgb(${lerp(255, 0, (fraction-0.5)*2)}, 255, 0)`;
-        }
-
-        function makeRatio(data) {
-            const [x, y] = data.value.split('/').map(x => parseFloat(x.trim()));
-            const fraction = x / y;
-            const container = document.createElement('div');
-            container.className += ' bp-bar-container';
-            const bar = document.createElement('p');
-            bar.className += ' bp-bar';
-            bar.style.backgroundColor = redToGreen(fraction, !data.higherIsWorse);
-            bar.style.width = (fraction * 100) + '%';
-            const text = document.createElement('span');
-            text.textContent = data.text ? data.text + ' ' + data.value : '';
-
-            bar.appendChild(text);
-            container.appendChild(bar);
-            return container;
-        };
-
-        const fieldMakers = {
-            'ratio': makeRatio
-        };
-
-        const map = G.leafMap;
-        const mapPos = new L.latLng(G.bpMap.gameToMap(this.pos));
-        const popup = L.popup({minWidth: 300, maxWidth: 500});
-
-        const containerElem = document.createElement('div');
-        containerElem.className += ' bp-contextmenu bp-contextmenu-unit-status';
-
-        const headerElem = document.createElement('h1');
-        headerElem.className = 'header';
-        headerElem.textContent = 'Unit Status';
-        containerElem.appendChild(headerElem);
-
-        this.stats.forEach(entry => containerElem.appendChild(fieldMakers[entry.type](entry)));
-
-        popup.setLatLng(mapPos)
-            .setContent(containerElem)
-            .openOn(map);
-    }
 }
 
 function randomElem(arr) {
     return arr[Math.floor(Math.random() * arr.length)];
 }
 
-
 const objectState = Object.create(null);
 var guiModifiedObjects = Object.create(null);
 var guiModifyHandler = null;
 var guiPointers = Object.create(null);
+
+function triggerGuiEvent(name, event) {
+    name = name.toLowerCase();
+    G.activityStack.handleEvent(name, event);
+    const simpleEvent = name.split('.', 1)[0];
+    if (simpleEvent !== name) {
+        G.activityStack.handleEvent(simpleEvent, event);
+    }
+};
 
 export function getObjectId (prefix) {
     var unique = false;
@@ -324,6 +278,7 @@ export function processPointing (data) {
         entry.layer = L.circleMarker(L.latLng([0,0]), {
             radius: 10,
             color: 'red',
+            weight: 2,
             fillColor: 'yellow',
             fillOpacity: 0.6
         });
@@ -337,13 +292,13 @@ export function processPointing (data) {
     entry.removeCallback = window.setTimeout(deleteEntry, removeDelayMs);
 };
 
+// Warning: reference to real state
 export function getState () {
-    // Warning: reference to real state
     return objectState;    
 };
 
 /*
-    This function is used to collect all modifications to prevent sending redudant information
+    This function is used to collect all modifications to prevent sending redundant information or doing duplicate work
 */
 export function markModified (object, sync) {
     // Store modification info
@@ -362,7 +317,7 @@ export function markModified (object, sync) {
 
     // Queue handler
     if (guiModifyHandler === null) {
-        guiModifyHandler = setTimeout(() => {
+        guiModifyHandler = window.setTimeout(() => {
             // Process dirty list
             Object.values(guiModifiedObjects).forEach((data) => {
                 if (data.syncRemote) {
@@ -379,7 +334,7 @@ export function markModified (object, sync) {
     }
 };
 
-function constructMenu (options, onItemSelected) {
+function constructMenu (options, onAnyItemSelected) {
     const containerElem = document.createElement('div');
     containerElem.className = 'bp-contextmenu';
     // containerElem.style.minWidth = '400px';
@@ -402,9 +357,8 @@ function constructMenu (options, onItemSelected) {
                 try {
                     action();
                 } finally {
-                    onItemSelected();    
+                    onAnyItemSelected();    
                 }
-                
             });
             containerElem.appendChild(elem);
         } else {
@@ -451,7 +405,78 @@ function getUnitMoveOrders (unit, callback) {
     return menuItems;
 };
 
+function showUnitStatus (unit) {
+    // const stats = [
+    //     {type: 'ratio', text: 'Manpower', value: '84 / 126'},
+    //     {type: 'ratio', text: 'Ammunition', value: '56 / 100'},
+    //     {type: 'ratio', text: 'Fatigue', value: '78 / 100', higherIsWorse: true}
+    // ];
+    // unit.stats = stats;
+
+    const lerp = (a, b, f) => a*(1-f) + b*f;
+
+    function redToGreen(fraction, higherIsBetter=true) {
+        fraction = higherIsBetter ? fraction : (1 - fraction);
+        if (fraction < 0.5) {
+            return `rgb(255,${lerp(0, 255, fraction*2)},0)`;
+        }
+        return `rgb(${lerp(255, 0, (fraction-0.5)*2)}, 255, 0)`;
+    }
+
+    function makeRatio(data) {
+        const [x, y] = data.value.split('/').map(x => parseFloat(x.trim()));
+        const fraction = x / y;
+        const container = document.createElement('div');
+        container.className += ' bp-bar-container';
+        const bar = document.createElement('p');
+        bar.className += ' bp-bar';
+        bar.style.backgroundColor = redToGreen(fraction, !data.higherIsWorse);
+        bar.style.width = (fraction * 100) + '%';
+        const text = document.createElement('span');
+        text.textContent = data.text ? data.text + ' ' + data.value : '';
+
+        bar.appendChild(text);
+        container.appendChild(bar);
+        return container;
+    };
+
+    const fieldMakers = {
+        'ratio': makeRatio
+    };
+
+    const map = G.leafMap;
+    const mapPos = new L.latLng(G.bpMap.gameToMap(unit.pos));
+
+    const containerElem = document.createElement('div');
+    containerElem.className += ' bp-contextmenu bp-contextmenu-unit-status';
+
+    const headerElem = document.createElement('h1');
+    headerElem.className = 'header';
+    headerElem.textContent = 'Unit Status';
+    containerElem.appendChild(headerElem);
+
+    if (unit.stats.length > 0) {
+        unit.stats.forEach(entry => containerElem.appendChild(fieldMakers[entry.type](entry)));
+    } else {
+        const statusElem = document.createElement('p');
+        statusElem.className += ' fallback-message ';
+        statusElem.textContent = 'No status available for unit';
+        containerElem.appendChild(statusElem);
+    }
+
+    const activity = new PopupActivity({
+        pos: mapPos,
+        content: containerElem,
+        map: map,
+        minWidth: 300,
+        maxWidth: 500
+    });
+    G.activityStack.push(activity);
+}
+
 function onUnitContextMenu (unit) {
+    const map = G.leafMap;
+
     const items = [
         ['Delete', () => {
             G.events.trigger('gui.object.deleted', [unit]);
@@ -490,21 +515,26 @@ function onUnitContextMenu (unit) {
         getUnitMoveOrders(unit, onMoveSelectedCallback).forEach(menuItem => items.push(menuItem));
     }
 
-    const map = G.leafMap;
     const mapPos = new L.latLng(G.bpMap.gameToMap(unit.pos));
-    const popup = L.popup({minWidth: 200, maxWidth: 600});
-    
+
     const menuElem = constructMenu({
         menuItems: items,
         header: 'Unit Menu'
-    }, () => map.closePopup());
+    }, () => {activity.close()});
 
-    popup.setLatLng(mapPos)
-        .setContent(menuElem)
-        .openOn(map);
+    const activity = new PopupActivity({
+        pos: mapPos,
+        content: menuElem,
+        map: map,
+        minWidth: 200,
+        maxWidth: 600
+    });
+
+    G.activityStack.push(activity);
 };
 
 function onMapContextMenu (mapPos) {
+    const map = G.leafMap;
     const items = [
         ['Create Unit', () => {
             const unit = getRandomUnit();
@@ -513,17 +543,21 @@ function onMapContextMenu (mapPos) {
             processObject(unit.oid, unit);
         }]
     ];
-    // Fix duplication
-    const map = G.leafMap;
-    const popup = L.popup({minWidth: 200, maxWidth: 600});
+
     const menuElem = constructMenu({
         menuItems: items,
         header: 'Map Menu'
-    }, () => {map.closePopup()});
+    }, () => {activity.close()});
 
-    popup.setLatLng(mapPos)
-        .setContent(menuElem)
-        .openOn(map);
+    const activity = new PopupActivity({
+        pos: mapPos,
+        content: menuElem,
+        map: G.leafMap,
+        minWidth: 200,
+        maxWidth: 600
+    });
+
+    G.activityStack.push(activity);
 };
 
 function openModifyUnitMenu (unit) {
@@ -738,6 +772,9 @@ const defaultActivity = (() => {
     const handledEvents = Object.create(null);
 
     handledEvents['rightclick.map'] = e => onMapContextMenu(e.latlng);
+    handledEvents['click.unit'] = e => showUnitStatus(e.unit);
+    handledEvents['rightclick.unit'] = e => onUnitContextMenu(e.unit);
+
     handledEvents['mousedown.map'] = e => {
         e.originalEvent.stopPropagation();
         const isCtrlDown = e.originalEvent.ctrlKey && !e.originalEvent.altKey && !e.originalEvent.shiftKey;
@@ -817,28 +854,75 @@ class PointActivity {
     }
 }
 
+/*
+    .onPopupClose() is run upon close
+*/
+class PopupActivity {
+    constructor(options) {
+        const _options = Object.assign({
+            pos: [0, 0],
+            content: '',
+            map: G.leafMap,
+            minWidth: 200,
+            maxWidth: 600,
+            closeButton: true,
+            closeOnEscapeKey: true,
+            closeOnClick: true
+        }, options);
+
+        const _leafOptions = Object.assign({}, _options);
+        delete _leafOptions['pos'];
+        delete _leafOptions['content'];
+        this._popup = L.popup(_leafOptions);
+
+        this.onPopupClose = null;
+        this._popup.on('remove', e => this._onClose(false));
+        this.setLatLng(_options.pos);
+        this.setContent(_options.content);
+        this._popup.openOn(_options.map);
+    }
+
+    setContent(stringOrHtml) {
+        this._popup.setContent(stringOrHtml);
+    }
+
+    setLatLng(latLng) {
+        this._popup.setLatLng(latLng);
+    }
+
+    close() {
+        this._onClose(true);
+    }
+
+    _onClose(popupStillOpen) {
+        if (popupStillOpen) {
+            this._popup.remove();
+        } else {
+            if (this.onPopupClose) {
+                this.onPopupClose();
+            };
+            G.activityStack.pop(this);
+        }
+    }
+
+    handleEvent(type, event) {
+        return;
+    }
+}
+
 export function initHandling () {
     G.activityStack = new ActivityStack();
 
-    const sendEvent = (n, e) => {
-        n = n.toLowerCase();
-        G.activityStack.handleEvent(n, e);
-        const simpleEvent = n.split('.', 1)[0];
-        if (simpleEvent !== n) {
-            G.activityStack.handleEvent(simpleEvent, e);
-        }
-    };
-
-    G.leafMap.on('click', e => sendEvent('click.map', e));
-    G.leafMap.on('dblclick', e => sendEvent('dblclick.map', e));
-    G.leafMap.on('mousedown', e => sendEvent('mousedown.map', e));
-    G.leafMap.on('mouseup', e => sendEvent('mouseup.map', e));
-    G.leafMap.on('mouseover', e => sendEvent('mouseover.map', e));
-    G.leafMap.on('mouseout', e => sendEvent('mouseout.map', e));
-    G.leafMap.on('mousemove', e => sendEvent('mousemove.map', e));
-    G.leafMap.on('contextmenu', e => sendEvent('rightclick.map', e));
-    G.leafMap.on('keypress', e => sendEvent('keypress.map', e));
-    // G.leafMap.on('preclick', e => sendEvent('rightclick.map', e));
+    G.leafMap.on('click', e => triggerGuiEvent('click.map', e));
+    G.leafMap.on('dblclick', e => triggerGuiEvent('dblclick.map', e));
+    G.leafMap.on('mousedown', e => triggerGuiEvent('mousedown.map', e));
+    G.leafMap.on('mouseup', e => triggerGuiEvent('mouseup.map', e));
+    G.leafMap.on('mouseover', e => triggerGuiEvent('mouseover.map', e));
+    G.leafMap.on('mouseout', e => triggerGuiEvent('mouseout.map', e));
+    G.leafMap.on('mousemove', e => triggerGuiEvent('mousemove.map', e));
+    G.leafMap.on('contextmenu', e => triggerGuiEvent('rightclick.map', e));
+    G.leafMap.on('keypress', e => triggerGuiEvent('keypress.map', e));
+    // G.leafMap.on('preclick', e => triggerGuiEvent('rightclick.map', e));
 
     G.activityStack.push(defaultActivity);
 };
