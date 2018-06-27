@@ -84,6 +84,7 @@ G.client = {id: null};
 G.codec = new util.DictionaryCodec();
 G.codec.addDeserializer('Unit', gui.Unit.deserialize);
 G.codec.addDeserializer('MoveOrder', guiOrder.MoveOrder.deserialize);
+G.codec.addDeserializer('FreehandStroke', gui.FreehandStroke.deserialize);
 
 function changeMap(mapName) {
     G.bpMap = new Map(mapConfigs[mapName]);
@@ -255,7 +256,6 @@ function setupNetContext(address) {
         G.currentRoom = e['room-name'];
         updateStatusElem();
         G.client.id = e['client-id'];
-        console.log(G.client);
     });
     updateStatusElem();
 

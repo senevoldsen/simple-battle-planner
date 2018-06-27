@@ -150,6 +150,94 @@ export class Unit extends GuiObject {
     }
 }
 
+export class FreehandStroke extends GuiObject {
+
+    constructor(oid, options) {
+        super(oid);
+        this._points = [];
+        this._options = Object.assign({
+            color: 'red',
+            width: 5,
+            opacity: 0.8
+        }, options);
+        this._layer = L.polyline([], {});
+        this._layer.on('contextmenu', e => triggerGuiEvent('rightclick.freehand', {
+            freehand: this,
+            clickPos: e.latlng
+        }));
+        this._layer.on('click', e => triggerGuiEvent('click.freehand', {
+            freehand: this,
+            clickPos: e.latlng
+        }));
+        this._isHidden = true;
+        this._needsUpdate = true;
+    }
+
+    serialize(encoder) {
+        encoder.store('oid', this.oid);
+        encoder.store('points', this._points);
+        encoder.store('options', this._options);
+    }
+
+    static deserialize(decoder) {
+        const oid = decoder.get('oid');
+        const _points = decoder.get('points', []);
+        const _options = decoder.get('options', {});
+        const result = new FreehandStroke(oid, _options);
+        result.setPoints(_points);
+        return result;
+    }
+
+    setPoints(points) {
+        this._points = points.map(this._toPoint);
+        this._needsUpdate = true;
+    }
+
+    considerPoint(latLng) {
+        this._points.push(this._toPoint(latLng));
+        this._needsUpdate = true;
+    }
+
+    getOptions() {
+        return Object.assign({}, this._options);
+    }
+
+    updateOptions(options) {
+        Object.assign(this._options, options);
+    }
+
+    _toPoint(point) {
+        return L.latLng(point);
+    }
+
+    _updateLayer() {
+        this._layer.setStyle({
+            width: this._options.width,
+            color: this._options.color,
+            opacity: this._options.opacity,
+            dashArray: "8 6"
+        });
+        this._layer.setLatLngs(Array.from(this._points));
+        this._layer.redraw();
+    }
+
+    updateGui() {
+        if (this._needsUpdate) {
+            this._needsUpdate = false;
+            this._updateLayer();
+        }
+        if (this._isHidden) {
+            this._isHidden = false;
+            this._layer.addTo(G.leafMap);
+        }
+    }
+
+    removeFromGui() {
+        this._layer.remove();
+        this._isHidden = true;
+    }
+}
+
 function randomElem(arr) {
     return arr[Math.floor(Math.random() * arr.length)];
 }
@@ -239,7 +327,7 @@ export function getTypeFromOid (oid) {
 export function processObject (oid, data) {
     const objectType = getTypeFromOid(oid);
 
-    if (objectType !== 'unit') {
+    if (objectType !== 'unit' && objectType !== 'freehand') {
         console.log(`Unknown object type '${objectType}' for id '${oid}'`);
         return;
     }
@@ -313,7 +401,7 @@ export function markModified (object, sync) {
     } else if (sync === 'remote') {
         activeData.syncRemote = true;
     }
-    guiModifiedObjects[object.oid]= activeData;
+    guiModifiedObjects[object.oid] = activeData;
 
     // Queue handler
     if (guiModifyHandler === null) {
@@ -533,6 +621,34 @@ function onUnitContextMenu (unit) {
     G.activityStack.push(activity);
 };
 
+function onFreehandContextMenu ({freehand, clickPos}) {
+    const map = G.leafMap;
+
+    const items = [
+        ['Delete', () => {
+            G.events.trigger('gui.object.deleted', [freehand]);
+            processObject(freehand.oid, null);
+        }]
+    ];
+
+    const mapPos = clickPos;
+
+    const menuElem = constructMenu({
+        menuItems: items,
+        header: 'Freehand Stroke Menu'
+    }, () => {activity.close()});
+
+    const activity = new PopupActivity({
+        pos: mapPos,
+        content: menuElem,
+        map: map,
+        minWidth: 200,
+        maxWidth: 600
+    });
+
+    G.activityStack.push(activity);
+};
+
 function onMapContextMenu (mapPos) {
     const map = G.leafMap;
     const items = [
@@ -541,6 +657,10 @@ function onMapContextMenu (mapPos) {
             unit.pos = G.bpMap.mapToGame(mapPos);
             G.events.trigger('gui.object.created', [unit]);
             processObject(unit.oid, unit);
+        }]
+        ,
+        ['Create Freehand Stroke', () => {
+            G.activityStack.push(new NewFreehandStrokeActivity());
         }]
     ];
 
@@ -748,15 +868,16 @@ class ActivityStack {
             if (index >= 0) {
                 // Unreverse index
                 index = this._activities.length - 1 - index;
-                this._activities.splice(index);
+                this._activities.splice(index, 1);
                 didRemove = true;
             }
             didRemoveCurrent = index === (this._activities.length-1);
-        } else {
-            this._activities.pop();
-            didRemove = true;
-            didRemoveCurrent = true;
         }
+        //  else {
+        //     this._activities.pop();
+        //     didRemove = true;
+        //     didRemoveCurrent = true;
+        // }
         if (didRemoveCurrent && this.count() > 0) {
             this.getCurrent().handleEvent('resume', {});
         }
@@ -774,6 +895,7 @@ const defaultActivity = (() => {
     handledEvents['rightclick.map'] = e => onMapContextMenu(e.latlng);
     handledEvents['click.unit'] = e => showUnitStatus(e.unit);
     handledEvents['rightclick.unit'] = e => onUnitContextMenu(e.unit);
+    handledEvents['rightclick.freehand'] = e => onFreehandContextMenu(e);
 
     handledEvents['mousedown.map'] = e => {
         e.originalEvent.stopPropagation();
@@ -907,6 +1029,41 @@ class PopupActivity {
 
     handleEvent(type, event) {
         return;
+    }
+}
+
+class NewFreehandStrokeActivity {
+    constructor() {
+        this._freehand = new FreehandStroke(getObjectId('freehand.'), {color: 'rgb(207,255,45)'});
+        this._started = false;
+    }
+
+    _start() {
+        this._started = true;
+        this._couldDrag = G.leafMap.dragging.enabled();
+        G.leafMap.dragging.disable();
+    }
+
+    _stop() {
+        G.activityStack.pop(this);
+        if (this._couldDrag) {
+            G.leafMap.dragging.enable();
+        }
+    }
+    
+    handleEvent(type, event) {
+        if (this._started) {
+            if (type === 'mousemove.map') {
+                this._freehand.considerPoint(event.latlng);
+                markModified(this._freehand, 'local');
+            } else if (type === 'mouseup') {
+                markModified(this._freehand, 'local');
+                G.events.trigger('gui.object.created', [this._freehand]);
+                this._stop();
+            }
+        } else if (type === 'mousedown.map') {
+            this._start();
+        }
     }
 }
 

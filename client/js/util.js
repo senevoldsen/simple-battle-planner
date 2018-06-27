@@ -32,6 +32,8 @@ export class DictionaryCodec {
         const jsType = typeof value;
         if (Array.isArray(value)) {
             return value.map(x => this._encode(x));
+        } else if (value === null) {
+            return value;
         } else if (jsType === 'object') {
             const result = {};
             const hasSerialize = 'serialize' in value && typeof value['serialize'] === 'function';
@@ -56,6 +58,8 @@ export class DictionaryCodec {
         const jsType = typeof value;
         if (Array.isArray(value)) {
             return value.map(x => this._decode(x));
+        } else if (value === null) {
+            return value;
         } else if (jsType === 'object') {
             const result = {};
             const hasDeserialize = TYPE_KEY in value;
@@ -74,8 +78,7 @@ export class DictionaryCodec {
                 Object.entries(value).forEach(([k, v]) => result[k] = this._decode(v));
             }
             return result;
-        }
-        else {
+        } else {
             return value;
         }
         throw 'Unhandled encoding';
