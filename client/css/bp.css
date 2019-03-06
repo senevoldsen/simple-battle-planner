@@ -50,6 +50,61 @@
     vertical-align: middle;
 }
 
+/* --- Attributes --- */
+
+/* -- Number range -- */
+.bp-attribute-range {
+    width: 100%;
+}
+
+.bp-attribute-range .slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    opacity: 0.7;
+    height: 20px;
+    background: #d3d3d3;
+    outline: none;
+    transition: opacity .2s;
+}
+
+.bp-attribute-range .slider:hover {
+    opacity: 1.0;
+}
+
+/* Special styling for WebKit/Blink */
+.bp-attribute-range .slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: #4CAF50;
+    cursor: pointer;
+    border-radius: 50%;
+}
+
+/* All the same stuff for Firefox */
+.bp-attribute-range .slider::-moz-range-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: #4CAF50;
+    cursor: pointer;
+    border-radius: 50%;
+}
+
+/* All the same stuff for IE */
+.bp-attribute-range .slider::-ms-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: #4CAF50;
+    cursor: pointer;
+    border-radius: 50%;
+}
+
 
 /* Leaflets default rules only include paths. We add our own, but use leaflets own too */
 .leaflet-pane .bp-leaflet-interactive {

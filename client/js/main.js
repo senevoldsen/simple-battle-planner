@@ -10,8 +10,9 @@ import * as util from './util.js';
 TODO: Try to move modify symbol dialog into html instead.
 CONSIDER: different detail level depending on map zoom.
 
-NEED: Freedrawing
+TODO: Improve freedrawing
 NEED: Multistage orders
+TODO: Put pointing on top.
 
 TODO: Clean up unused gui state
 */
@@ -111,7 +112,10 @@ function changeMap(mapName) {
             bounds: mapBounds,
             tileSize: tileSize
         }).addTo(G.leafMap);
-} 
+
+    const transientPane = G.leafMap.createPane('transientPane');
+    transientPane.style.zIndex = 625;
+}
 
 changeMap(G.currentMap);
 
@@ -267,4 +271,3 @@ var socketAddress = "ws://" + hostname + ":8020/";
 G.netContext = setupNetContext(socketAddress)
 
 gui.initHandling();
-

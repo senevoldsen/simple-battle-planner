@@ -238,6 +238,55 @@ export class FreehandStroke extends GuiObject {
     }
 }
 
+class Attribute {
+    createDom() {
+        throw 'Must be overridden';
+    }
+
+    getValue() {
+        throw 'Must be overridden';
+    }
+
+    setValue() {
+        throw 'Must be overridden';
+    }
+}
+
+export class RangeAttribute extends Attribute {
+    constructor(options) {
+        super();
+        this._options = Object.assign({
+            value: 0,
+            minValue: 0,
+            maxValue: 100,
+            step: 1
+        }, options);
+    }
+
+    createDom() {
+        const elem = document.createElement('div');
+        elem.className += ' bp-attribute bp-attribute-range ';
+        const input = document.createElement('input');
+        input.className += ' slider ';
+        input.type = 'range';
+        input.min = this._options.minValue;
+        input.max = this._options.maxValue;
+        input.value = this._options.value;
+        elem.appendChild(input);
+
+        return elem;
+    }
+
+    getValue() {
+        return this._options.value;
+    }
+
+    setValue() {
+        return this._options.value;
+    }
+}
+
+
 function randomElem(arr) {
     return arr[Math.floor(Math.random() * arr.length)];
 }
@@ -368,7 +417,8 @@ export function processPointing (data) {
             color: 'red',
             weight: 2,
             fillColor: 'yellow',
-            fillOpacity: 0.6
+            fillOpacity: 0.6,
+            pane: 'transientPane'
         });
         entry.layer.addTo(G.leafMap);
     }
