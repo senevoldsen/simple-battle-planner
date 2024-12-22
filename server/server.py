@@ -240,7 +240,7 @@ async def handle_message(client, message):
         await client.queue_message(reply)
 
 
-async def handler(websocket, path):
+async def handler(websocket):
     global main_server
     server = main_server
 
@@ -281,24 +281,19 @@ async def handler(websocket, path):
     # Connection automatically closed, if not already, on exit here
 
 
-async def keyboard_interrupt_checker():
-    while True:
-        await asyncio.sleep(0.5)
+async def main():
+    port = 8020
+    if socket.gethostname() == 'scw-b532e7':
+        port = 8765
 
+    server = await websockets.serve(handler, 'localhost', port)
+    try:
+        log.info('BP Server started')
+        await server.serve_forever()
+    except KeyboardInterrupt:
+        log.info('User stopped server')
+    finally:
+        main_server.close()
 
-port = 8020
-if socket.gethostname() == 'scw-b532e7':
-    port = 8765
-
-
-asyncio.async(keyboard_interrupt_checker())
-
-start_server = websockets.serve(handler, 'localhost', port)
-asyncio.get_event_loop().run_until_complete(start_server)
-try:
-    log.info('BP Server started')
-    asyncio.get_event_loop().run_forever()
-except KeyboardInterrupt:
-    log.info('User stopped server')
-finally:
-    main_server.close()
+if __name__ == '__main__':
+    asyncio.run(main())

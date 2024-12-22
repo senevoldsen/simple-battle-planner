@@ -544,12 +544,6 @@ function getUnitMoveOrders (unit, callback) {
 };
 
 function showUnitStatus (unit) {
-    // const stats = [
-    //     {type: 'ratio', text: 'Manpower', value: '84 / 126'},
-    //     {type: 'ratio', text: 'Ammunition', value: '56 / 100'},
-    //     {type: 'ratio', text: 'Fatigue', value: '78 / 100', higherIsWorse: true}
-    // ];
-    // unit.stats = stats;
 
     const lerp = (a, b, f) => a*(1-f) + b*f;
 

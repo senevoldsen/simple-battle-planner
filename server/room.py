@@ -1,6 +1,6 @@
 """Manages a single room"""
 
-import collections
+import collections.abc
 import asyncio
 import json
 import copy
@@ -102,7 +102,7 @@ class Room(object):
     def _make_exclude_set(self, exclude=None):
         if exclude is None:
             excludes = set([])
-        elif isinstance(exclude, collections.Iterable):
+        elif isinstance(exclude, collections.abc.Iterable):
             excludes = set(exclude)
         else:
             excludes = set([exclude])
